@@ -175,15 +175,16 @@
         <h2>Slack Integration</h2>
         <p class="muted">
           Optionally send newly created Stories/Tasks to a Slack Workflow Builder webhook (e.g. a
-          "Front Request" workflow) right after creating them in Jira. The team's shared webhook
-          is already wired in by default, so you don't need to fill in the URL field below unless
-          you want to point it at a different workflow.
+          "Front Request" workflow) right after creating them in Jira. If your team has set up a
+          shared default webhook (via a local <code>secrets.local.js</code> file - not something
+          from this Options page), you don't need to fill in the URL field below at all. Otherwise,
+          paste your own webhook URL here to enable this feature.
         </p>
-        <label for="slackWebhookUrl">Slack Workflow webhook URL (optional override)</label>
+        <label for="slackWebhookUrl">Slack Workflow webhook URL</label>
         <input
           id="slackWebhookUrl"
           type="password"
-          placeholder="Leave blank to use the team's default webhook"
+          placeholder="https://hooks.slack.com/triggers/... (leave blank to use a team default, if configured)"
         />
         <p class="muted">
           Treat this URL as a secret - anyone with it can trigger your Slack workflow. Created in

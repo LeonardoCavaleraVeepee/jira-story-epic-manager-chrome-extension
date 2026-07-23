@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Jira Story & Epic Manager",
-  "version": "0.1.73",
+  "version": "0.1.74",
   "description": "Create or update Jira epics/stories and auto-create frontend subtasks.",
   "icons": {
     "16": "icons/icon16.png",

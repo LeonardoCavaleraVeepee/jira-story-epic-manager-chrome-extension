@@ -296,6 +296,8 @@ async function handleMessage(message) {
       return diagnoseAuth(message.baseUrl);
     case "submitIssue":
       return submitIssue(message.payload);
+    case "hasSlackWebhook":
+      return hasSlackWebhook();
     default:
       throw new Error("Unsupported action.");
   }
@@ -1123,9 +1125,25 @@ function normalizeSlackId(slackUserId) {
 // fixes that, and mirrors how one Jira frontend subtask is already created per platform. See the
 // Slack Integration section in options.html/options.js for where slackWebhookUrl and slackUserId
 // are configured.
+// Lets the Gemini panel/popup UI check, on load, whether a Slack webhook is actually available
+// (either the user's own override in Options, or the shared team default from secrets.local.js)
+// before enabling the "Send to Slack workflow" checkbox - since DEFAULT_SLACK_WEBHOOK_URL is a
+// background-service-worker-only global (loaded via importScripts), the UI has no way to check
+// this itself and must ask via a message, same as every other background-mediated Jira/Slack call.
+async function hasSlackWebhook() {
+  const settings = await getStorageSync().get({ slackWebhookUrl: "" });
+  return { hasWebhook: Boolean((settings.slackWebhookUrl || "").trim() || DEFAULT_SLACK_WEBHOOK_URL) };
+}
+
 async function notifySlackWorkflow(baseUrl, issueKey, payload) {
   const settings = await getStorageSync().get({ slackWebhookUrl: "", slackUserId: "" });
   const webhookUrl = (settings.slackWebhookUrl || "").trim() || DEFAULT_SLACK_WEBHOOK_URL;
+  if (!webhookUrl) {
+    throw new Error(
+      "No Slack webhook URL is configured. Add one in extension Options (Slack Integration " +
+        "section), or ask whoever maintains this extension for the shared secrets.local.js file."
+    );
+  }
   const slack = payload.slack || {};
   const rawDevices =
     payload.frontendSubtaskRoles && payload.frontendSubtaskRoles.length

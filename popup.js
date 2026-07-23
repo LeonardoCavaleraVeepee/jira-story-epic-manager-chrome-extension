@@ -102,10 +102,18 @@ async function init() {
   setAssigneeOptions([]);
   setEpicOptions([]);
   renderFrontendAssignees(settings);
-  // background.js falls back to a baked-in default team webhook (DEFAULT_SLACK_WEBHOOK_URL) when
-  // no per-user override is configured in Options, so a webhook is always available - no
-  // per-teammate setup required. The checkbox now only needs a frontend platform selected.
-  slackWebhookConfigured = true;
+  // Ask background.js whether a Slack webhook is actually available (the user's own override in
+  // Options, or the shared team default from secrets.local.js) before enabling the checkbox -
+  // DEFAULT_SLACK_WEBHOOK_URL lives only in the background service worker's scope (loaded via
+  // importScripts, which may not even exist on a fresh checkout without secrets.local.js), so it
+  // can't be assumed to always be present. Defaults to false if the check itself fails for any
+  // reason, so the checkbox is never misleadingly enabled.
+  try {
+    const webhookCheck = await chrome.runtime.sendMessage({ action: "hasSlackWebhook" });
+    slackWebhookConfigured = Boolean(webhookCheck.ok && webhookCheck.hasWebhook);
+  } catch (_error) {
+    slackWebhookConfigured = false;
+  }
   elements.sendToSlack.checked = false;
   updateSlackAvailability();
 

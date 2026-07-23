@@ -477,3 +477,18 @@ For a quick overview of what the extension does and how to use it day-to-day, se
   still works fine, it just no longer pre-fills the webhook field in Options for that person.
   `secrets.local.example.js` is the checked-in template teammates copy locally and fill in with
   the real URL; see the Setup section above.
+- **Fixed the "Send to Slack workflow" checkbox being wrongly enabled on a fresh checkout with no
+  `secrets.local.js` and no webhook configured in Options**, which caused a confusing failure
+  (attempting to `fetch()` an empty URL) instead of a clear error when submitted. When
+  `DEFAULT_SLACK_WEBHOOK_URL` was moved into `secrets.local.js` (previous entry), the panel/popup
+  UI was left unconditionally assuming a webhook was always available
+  (`slackWebhookConfigured = true`), since it can no longer read that background-service-worker-
+  only global directly. Added a `hasSlackWebhook` message handler in `background.js` that reports
+  whether a webhook is actually available (user's Options override OR `secrets.local.js`
+  default); the Gemini panel and popup now call it on load and only enable the checkbox when the
+  answer is genuinely yes. `notifySlackWorkflow()` also once again throws a clear
+  "No Slack webhook URL is configured..." error (pointing at Options and `secrets.local.js`) if
+  neither source has one, instead of silently trying to POST to an empty URL. Net effect: without
+  `secrets.local.js`, the extension works exactly as before Slack support existed - every other
+  feature (Jira create/update, frontend subtasks, images) is completely unaffected either way,
+  since Slack notification has always been an optional, non-blocking add-on.
