@@ -527,3 +527,13 @@ For a quick overview of what the extension does and how to use it day-to-day, se
     issue for editing", so stale content must never linger). Submitting now targets the actual
     selected issue's key instead of a stale/disabled dropdown value, and is blocked with a clear
     "Select an issue to update before continuing." error if nothing is selected yet.
+- **Allowed editing the Assignee when updating an existing issue, pre-filled with its current
+  assignee.** Previously the Assignee combobox was hidden entirely in Update mode, so updating an
+  issue could never change (or even see) who it was assigned to. The Assignee section is now
+  shown in both Create and Update mode; selecting an issue to update now also fetches its current
+  assignee (`getIssueDetails` in `background.js` now requests the `assignee` field alongside
+  summary/description/issuetype) and pre-selects it in the combobox via the same `selectAssignee()`
+  used for a manual pick, clearing back to "Unassigned" if the issue genuinely has no assignee.
+  `updateIssue()` now always sends the `assignee` field on submit (the selected user's ID, or
+  explicit `null` to unassign) so leaving the field untouched round-trips the same assignee, and
+  clearing it to "Unassigned" before submitting genuinely unassigns the issue.

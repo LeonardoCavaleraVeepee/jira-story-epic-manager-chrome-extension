@@ -1231,7 +1231,6 @@ function onAssigneeKeydown(panel, event) {
 function updateModeState(panel) {
   const isUpdate = panel.mode.value === "update";
   panel.updateSection.classList.toggle("hidden", !isUpdate);
-  panel.assigneeSection.classList.toggle("hidden", isUpdate);
   const showEpicSelector = isParentEpicRequired(panel);
   panel.epicSection.classList.toggle("hidden", !showEpicSelector);
   updateEpicStatusText(panel);
@@ -1775,6 +1774,7 @@ function clearIssueSelection(panel) {
   panel.details.value = "";
   updateDetailsPreview(panel);
   updateIssueStatusText(panel);
+  clearAssigneeSelection(panel);
 }
 
 function openIssueDropdown(panel) {
@@ -1838,6 +1838,7 @@ async function selectIssue(panel, issue) {
     panel.summary.value = "";
     panel.details.value = "";
     updateDetailsPreview(panel);
+    clearAssigneeSelection(panel);
     return;
   }
 
@@ -1854,6 +1855,10 @@ async function selectIssue(panel, issue) {
     panel.summary.value = response.summary || "";
     panel.details.value = response.details || "";
     updateDetailsPreview(panel);
+    // Pre-fill the Assignee combobox with the issue's real current assignee (or clear it back to
+    // Unassigned) - same "always overwrite on selection" rule as Title/Details, so editing an
+    // issue always starts from its actual current state rather than a stale/leftover selection.
+    selectAssignee(panel, response.assignee || null);
     setStatus(panel.resultStatus, `Loaded ${issue.key}.`);
   } catch (error) {
     setStatus(panel.resultStatus, error.message, true);
@@ -1985,8 +1990,7 @@ async function onSubmit(panel) {
       issueKey: panel.mode.value === "update" && panel.selectedUpdateIssue ? panel.selectedUpdateIssue.key : "",
       summary: panel.summary.value.trim(),
       details: panel.details.value.trim(),
-      assigneeAccountId:
-        panel.mode.value === "create" && panel.selectedAssignee ? panel.selectedAssignee.accountId : "",
+      assigneeAccountId: panel.selectedAssignee ? panel.selectedAssignee.accountId : "",
       parentEpicKey: isParentEpicRequired(panel) && panel.selectedEpic ? panel.selectedEpic.key : "",
       frontendSubtaskRoles: isCreate && isStory ? panel.selectedDevices : [],
       device: isCreate && isTask ? panel.selectedDevices[0] || "" : "",

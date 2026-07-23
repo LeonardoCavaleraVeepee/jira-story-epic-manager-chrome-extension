@@ -1175,14 +1175,26 @@ async function getIssueDetails(inputBaseUrl, issueKey) {
     throw new Error("Issue key is required.");
   }
 
-  const path = `${apiRoot}/issue/${encodeURIComponent(key)}?fields=summary,description,issuetype`;
+  const path = `${apiRoot}/issue/${encodeURIComponent(key)}?fields=summary,description,issuetype,assignee`;
   const result = await jiraFetch(baseUrl, path, { method: "GET" });
+  const assigneeField = result.fields?.assignee;
 
   return {
     key,
     summary: result.fields?.summary || "",
     details: fromDescriptionField(apiRoot, result.fields?.description),
-    issueType: result.fields?.issuetype?.name || "Unknown"
+    issueType: result.fields?.issuetype?.name || "Unknown",
+    // Mirrors the { accountId, displayName, emailAddress } shape returned by
+    // listAssignableUsers()/searchAssignableUsers() so the Assignee combobox can pre-fill from
+    // it directly via the same selectAssignee() used for a manual pick - accountId falls back to
+    // the Server/DC username (`name`) the same way toAssigneeField() expects it.
+    assignee: assigneeField
+      ? {
+          accountId: assigneeField.accountId || assigneeField.name || assigneeField.key || "",
+          displayName: assigneeField.displayName || assigneeField.name || assigneeField.emailAddress || "Unknown user",
+          emailAddress: assigneeField.emailAddress || ""
+        }
+      : null
   };
 }
 
@@ -1220,7 +1232,8 @@ async function submitIssue(payload) {
       baseUrl,
       payload.issueKey,
       payload.summary,
-      payload.details
+      payload.details,
+      payload.assigneeAccountId
     );
     updateResult.attachmentWarnings = await uploadPendingImages(
       baseUrl,
@@ -1579,7 +1592,7 @@ async function createIssueWithApiRootFallback(
   return { createdIssue, apiRoot: preferredApiRoot };
 }
 
-async function updateIssue(apiRoot, baseUrl, issueKey, summary, details) {
+async function updateIssue(apiRoot, baseUrl, issueKey, summary, details, assigneeAccountId) {
   const key = (issueKey || "").trim();
   if (!key) {
     throw new Error("Issue key is required for update.");
@@ -1588,14 +1601,21 @@ async function updateIssue(apiRoot, baseUrl, issueKey, summary, details) {
     throw new Error("Title is required for update.");
   }
 
+  const fields = {
+    summary: summary.trim(),
+    description: toDescriptionField(apiRoot, details)
+  };
+
+  // Always reflect whatever the Assignee combobox currently shows - including an explicit clear
+  // back to "Unassigned" - since the field is now pre-filled with the issue's real current
+  // assignee when editing, submitting without touching it should be a no-op round-trip, and
+  // clearing it should genuinely unassign rather than silently leaving the previous assignee.
+  const normalizedAssigneeAccountId = (assigneeAccountId || "").trim();
+  fields.assignee = normalizedAssigneeAccountId ? toAssigneeField(apiRoot, normalizedAssigneeAccountId) : null;
+
   await jiraFetch(baseUrl, `${apiRoot}/issue/${encodeURIComponent(key)}`, {
     method: "PUT",
-    body: JSON.stringify({
-      fields: {
-        summary: summary.trim(),
-        description: toDescriptionField(apiRoot, details)
-      }
-    })
+    body: JSON.stringify({ fields })
   });
 
   return { updatedIssueKey: key };

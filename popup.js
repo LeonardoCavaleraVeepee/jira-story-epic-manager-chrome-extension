@@ -188,7 +188,6 @@ function onModeChanged() {
     elements.issueType.value !== "Story" || isUpdate
   );
   elements.slackSection.classList.toggle("hidden", !showFrontendOptions);
-  elements.assigneeSection.classList.toggle("hidden", isUpdate);
   const showEpicSelector = isParentEpicRequired();
   elements.epicSection.classList.toggle("hidden", !showEpicSelector);
   updateEpicStatusText();
@@ -789,6 +788,7 @@ function clearIssueSelection() {
   elements.details.value = "";
   updateDetailsPreview();
   updateIssueStatusText();
+  clearAssigneeSelection();
 }
 
 function openIssueDropdown() {
@@ -858,6 +858,7 @@ async function selectIssue(issue) {
     elements.summary.value = "";
     elements.details.value = "";
     updateDetailsPreview();
+    clearAssigneeSelection();
     return;
   }
 
@@ -874,6 +875,9 @@ async function selectIssue(issue) {
     elements.summary.value = response.summary || "";
     elements.details.value = response.details || "";
     updateDetailsPreview();
+    // Pre-fill the Assignee combobox with the issue's real current assignee (or clear it back
+    // to Unassigned) - same "always overwrite on selection" rule as Title/Details.
+    selectAssignee(response.assignee || null);
     setStatus(elements.resultStatus, `Loaded ${issue.key}.`);
   } catch (error) {
     setStatus(elements.resultStatus, error.message, true);
@@ -1249,8 +1253,7 @@ async function onSubmit() {
       issueKey: elements.mode.value === "update" && selectedUpdateIssue ? selectedUpdateIssue.key : "",
       summary: elements.summary.value.trim(),
       details: elements.details.value.trim(),
-      assigneeAccountId:
-        elements.mode.value === "create" && selectedAssignee ? selectedAssignee.accountId : "",
+      assigneeAccountId: selectedAssignee ? selectedAssignee.accountId : "",
       parentEpicKey: isParentEpicRequired() && selectedEpic ? selectedEpic.key : "",
       frontendSubtaskRoles: isCreate && isStory ? selectedDevices : [],
       device: isCreate && isTask ? selectedDevices[0] || "" : "",
