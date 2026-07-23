@@ -554,3 +554,14 @@ For a quick overview of what the extension does and how to use it day-to-day, se
   "Channel ID"), and added `normalizeSlackChannelId()` in `background.js` (mirroring
   `normalizeSlackId()`) so pasting Slack's `<#C0123ABC456|name>` mention syntax or a leftover
   leading `#` still resolves to the bare ID Slack's webhook now expects.
+- **Fixed `invalid_workflow_input` persisting even with a real Channel ID entered.** Root cause:
+  Slack Workflow Builder variables typed as `Channel` (or `User`) validate the value's *format*
+  server-side regardless of whether the variable itself is marked optional - an empty string is
+  not treated as "not provided" for these types the way it is for a plain `Text` variable, it's
+  rejected outright as a malformed value. Since "Channel ID" (and the Slack member ID) are
+  optional fields in this extension's UI, leaving either blank still sent `channel_feature: ""` /
+  `slack_id: ""` in the webhook body, which Slack now rejects once those variables are
+  Channel/User-typed. `notifySlackWorkflow()` in `background.js` now omits the `channel_feature`
+  and `slack_id` keys from the request body entirely when there's no value, instead of sending an
+  empty string, so Slack sees "not provided" for an optional variable rather than "provided but
+  invalid".

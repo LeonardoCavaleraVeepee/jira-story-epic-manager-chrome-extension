@@ -1403,6 +1403,7 @@ async function notifySlackWorkflow(baseUrl, issueKey, payload) {
       // "Desktop" instead - translate just for this outbound payload, leaving Jira subtask role
       // names as-is.
       const slackDevice = device === "Web" ? "Desktop" : device;
+      const normalizedChannelFeature = normalizeSlackChannelId(slack.channelFeature);
       const body = {
         request_features: payload.summary || "",
         device: slackDevice,
@@ -1411,7 +1412,15 @@ async function notifySlackWorkflow(baseUrl, issueKey, payload) {
         expected_eta: slack.expectedEta || "",
         figma: slack.figma || "",
         jira_ticket: jiraTicketUrl,
-        channel_feature: normalizeSlackChannelId(slack.channelFeature),
+        // Slack Workflow Builder variables typed as "Channel" (or "User") validate the value's
+        // *format* server-side regardless of whether the variable is marked required - an empty
+        // string is NOT treated as "no value provided" the way it is for a plain Text variable,
+        // it's rejected outright as a malformed channel ID, which is what actually caused
+        // "invalid_workflow_input" here even after switching to a real Channel ID: the field is
+        // optional in this extension's UI, so leaving it blank still sent `channel_feature: ""`.
+        // Omit the key entirely when there's no value instead, so Slack sees "not provided" for
+        // an optional variable rather than "provided but invalid".
+        ...(normalizedChannelFeature ? { channel_feature: normalizedChannelFeature } : {}),
         // Slack ONLY ever renders a real clickable/notifying mention for the literal syntax
         // <@MEMBER_ID> evaluated server-side when the message is posted - a plain "@handle"
         // string (however it's produced) is always just inert text, since Slack has no way to
@@ -1419,7 +1428,7 @@ async function notifySlackWorkflow(baseUrl, issueKey, payload) {
         // member ID, and the workflow's message step text itself must contain literal
         // "<@{{slack_id}}>" (not just "{{slack_id}}") for it to render as a mention - see README
         // for the Slack-side fix.
-        slack_id: slackId
+        ...(slackId ? { slack_id: slackId } : {})
       };
 
       try {
