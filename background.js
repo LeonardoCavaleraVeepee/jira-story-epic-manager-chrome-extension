@@ -1340,6 +1340,24 @@ function normalizeSlackId(slackUserId) {
   return trimmed.replace(/^@/, "");
 }
 
+// Mirrors normalizeSlackId() above, but for a Slack Channel ID instead of a member ID - needed
+// once a Workflow Builder trigger variable's Data type is changed from "Text" to "Channel"
+// (same reasoning as slack_id/User: Slack then validates the value server-side and rejects
+// anything that isn't a real channel ID with "invalid_workflow_input"). Handles Slack's
+// `<#C0123ABC456|channel-name>` mention syntax (e.g. pasted from a message) and a plain leading
+// "#" (e.g. someone still typing "#channel-name" out of habit), stripping either down to the bare
+// ID/name so it's sent as cleanly as possible - though ultimately the caller is responsible for
+// entering a real Channel ID once the trigger variable requires one, a channel *name* can't be
+// resolved to an ID without a Slack API call this extension doesn't make.
+function normalizeSlackChannelId(channelFeature) {
+  const trimmed = String(channelFeature || "").trim();
+  const angleMatch = trimmed.match(/^<#([^|>]+)/);
+  if (angleMatch) {
+    return angleMatch[1];
+  }
+  return trimmed.replace(/^#/, "");
+}
+
 // Posts one call per selected platform to the Slack "Front Request" workflow webhook so it shows
 // up in the team's intake pipeline without the requester having to re-fill the Slack form by
 // hand. The workflow's message template is built around a *single* device value (e.g. "...has
@@ -1393,7 +1411,7 @@ async function notifySlackWorkflow(baseUrl, issueKey, payload) {
         expected_eta: slack.expectedEta || "",
         figma: slack.figma || "",
         jira_ticket: jiraTicketUrl,
-        channel_feature: slack.channelFeature || "",
+        channel_feature: normalizeSlackChannelId(slack.channelFeature),
         // Slack ONLY ever renders a real clickable/notifying mention for the literal syntax
         // <@MEMBER_ID> evaluated server-side when the message is posted - a plain "@handle"
         // string (however it's produced) is always just inert text, since Slack has no way to

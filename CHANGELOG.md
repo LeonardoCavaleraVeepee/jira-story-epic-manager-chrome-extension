@@ -537,3 +537,20 @@ For a quick overview of what the extension does and how to use it day-to-day, se
   `updateIssue()` now always sends the `assignee` field on submit (the selected user's ID, or
   explicit `null` to unassign) so leaving the field untouched round-trips the same assignee, and
   clearing it to "Unassigned" before submitting genuinely unassigns the issue.
+- **Added upfront validation for the Slack member ID field in Options**, catching the same
+  `invalid_workflow_input` mistake documented in the previous entry (a plain name/handle typed
+  into a field whose Workflow Builder trigger variable is typed as `User`) before it's saved,
+  instead of only surfacing as a confusing 400 error the next time an issue is submitted.
+  `onSaveSlackSettings()` now rejects values that don't look like a real Slack member ID (a
+  short all-caps alphanumeric token starting with a letter, e.g. `U0123ABC456`), with a clear
+  message pointing at Slack's "Copy member ID" action.
+- **Fixed `invalid_workflow_input` after changing the `channel_feature` trigger variable's Data
+  type to Channel.** Same root cause as the `slack_id`/User case: once a Workflow Builder trigger
+  variable is typed as `Channel` (instead of `Text`), Slack validates the value server-side and
+  rejects anything that isn't a real Channel ID - the "Channel feature" field previously accepted
+  free text like `#prj-bla-bla`, which passed fine while the variable was Text-typed but is
+  rejected once it's Channel-typed. Renamed the field to **Channel ID** with a placeholder/help
+  text pointing at Slack's real Channel ID (found via the channel name dropdown → scroll to
+  "Channel ID"), and added `normalizeSlackChannelId()` in `background.js` (mirroring
+  `normalizeSlackId()`) so pasting Slack's `<#C0123ABC456|name>` mention syntax or a leftover
+  leading `#` still resolves to the bare ID Slack's webhook now expects.

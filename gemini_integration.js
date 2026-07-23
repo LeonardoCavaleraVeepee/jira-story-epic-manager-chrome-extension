@@ -680,8 +680,12 @@ function buildPanel() {
         </select>
         <label for="jiraSlackFigma">Figma (optional)</label>
         <input id="jiraSlackFigma" placeholder="https://figma.com/..." />
-        <label for="jiraSlackChannelFeature">Channel feature (optional)</label>
-        <input id="jiraSlackChannelFeature" placeholder="#prj-bla-bla" />
+        <label for="jiraSlackChannelFeature">Channel ID (optional)</label>
+        <input id="jiraSlackChannelFeature" placeholder="e.g. C0123ABC456" />
+        <p class="jira-muted">
+          Must be the Slack channel's real ID, not its name - open the channel, click its name at
+          the top &rarr; scroll down to "Channel ID" &rarr; copy it.
+        </p>
       </div>
       <p id="jiraSlackStatus" class="jira-muted"></p>
     </section>

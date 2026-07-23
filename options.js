@@ -504,6 +504,20 @@ async function onSaveSlackSettings() {
       }
     }
 
+    if (userId && !isLikelySlackMemberId(userId)) {
+      // A previous "Slack webhook returned 400: invalid_workflow_input" turned out to be caused
+      // by a plain name (e.g. "name.surname") typed into this field instead of a raw Slack
+      // member ID - the workflow trigger's slack_id variable is typed as "User" and rejects
+      // anything that isn't a real member ID. Slack member IDs are a short all-caps
+      // alphanumeric token starting with a letter (commonly U..., sometimes W...) - catching an
+      // obviously-wrong value here, before it ever reaches Slack, gives a clear actionable error
+      // instead of that cryptic 400 surfacing later during an actual issue creation.
+      throw new Error(
+        "Slack member ID doesn't look valid. It should look like \"U0123ABC456\" (from Slack: " +
+          "your profile → \"...\" menu → \"Copy member ID\"), not a name or email."
+      );
+    }
+
     await getStorageSync().set({
       slackWebhookUrl: webhookUrl,
       slackUserId: userId
@@ -512,6 +526,17 @@ async function onSaveSlackSettings() {
   } catch (error) {
     renderSlackStatus(error.message, true);
   }
+}
+
+// Mirrors normalizeSlackId() in background.js (strips an optional "<@...>" mention wrapper or
+// leading "@") before checking the shape of a real Slack member ID: a short, all-caps
+// alphanumeric token starting with a letter, e.g. "U0123ABC456" or "W0123ABC456". This is a
+// best-effort sanity check, not a full validation against Slack's actual ID space, but it's
+// enough to reject the common mistake of typing a plain name/handle/email here instead.
+function isLikelySlackMemberId(rawValue) {
+  const angleMatch = rawValue.match(/^<@([^|>]+)/);
+  const value = (angleMatch ? angleMatch[1] : rawValue.replace(/^@/, "")).trim();
+  return /^[A-Z][A-Z0-9]{6,}$/.test(value);
 }
 
 function renderSlackStatus(message, isError = false) {

@@ -123,8 +123,12 @@
           </select>
           <label for="slackFigma">Figma (optional)</label>
           <input id="slackFigma" placeholder="https://figma.com/..." />
-          <label for="slackChannelFeature">Channel feature (optional)</label>
-          <input id="slackChannelFeature" placeholder="#prj-bla-bla" />
+          <label for="slackChannelFeature">Channel ID (optional)</label>
+          <input id="slackChannelFeature" placeholder="e.g. C0123ABC456" />
+          <p class="muted">
+            Must be the Slack channel's real ID, not its name - open the channel, click its name
+            at the top &rarr; scroll down to "Channel ID" &rarr; copy it.
+          </p>
         </div>
         <p id="slackStatus" class="muted"></p>
       </section>
