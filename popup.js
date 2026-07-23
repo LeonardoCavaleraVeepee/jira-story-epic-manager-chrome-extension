@@ -34,7 +34,9 @@ const elements = {
   connectionStatus: document.getElementById("connectionStatus"),
   mode: document.getElementById("mode"),
   updateSection: document.getElementById("updateSection"),
-  issueList: document.getElementById("issueList"),
+  issueSearch: document.getElementById("issueSearch"),
+  issueDropdown: document.getElementById("issueDropdown"),
+  issueStatus: document.getElementById("issueStatus"),
   issueType: document.getElementById("issueType"),
   issueTypeIcon: document.getElementById("issueTypeIcon"),
   summary: document.getElementById("summary"),
@@ -71,6 +73,13 @@ let selectedDevices = [];
 let slackWebhookConfigured = false;
 
 let cachedIssues = [];
+// True while loadIssuesForUpdate() has an in-flight fetch for the currently selected project +
+// issue type - lets the Issue search box show "Loading issues..." instead of a misleading
+// empty/"no matches" state while the fetch is still in flight.
+let issuesLoading = false;
+let selectedUpdateIssue = null;
+let issueDropdownItems = [];
+let issueHighlightIndex = -1;
 let cachedProjects = [];
 let cachedAssignableUsers = [];
 let cachedEpics = [];
@@ -128,6 +137,10 @@ async function init() {
   elements.epicSearch.addEventListener("focus", onEpicFocus);
   elements.epicSearch.addEventListener("blur", onEpicBlur);
   elements.epicSearch.addEventListener("keydown", onEpicKeydown);
+  elements.issueSearch.addEventListener("input", onIssueSearchInput);
+  elements.issueSearch.addEventListener("focus", onIssueFocus);
+  elements.issueSearch.addEventListener("blur", onIssueBlur);
+  elements.issueSearch.addEventListener("keydown", onIssueKeydown);
   elements.details.addEventListener("input", updateDetailsPreview);
   elements.submitButton.addEventListener("click", onSubmit);
   elements.sendToSlack.addEventListener("change", updateSlackFieldsVisibility);
@@ -166,7 +179,6 @@ function updateSlackAvailability() {
 function onModeChanged() {
   const isUpdate = elements.mode.value === "update";
   elements.updateSection.classList.toggle("hidden", !isUpdate);
-  elements.issueType.disabled = isUpdate;
 
   const showFrontendOptions =
     !isUpdate && (elements.issueType.value === "Story" || elements.issueType.value === "Task");
@@ -194,8 +206,12 @@ function onModeChanged() {
     updateSlackAvailability();
   }
 
-  if (isUpdate && elements.projectKey.value.trim()) {
-    loadIssues().catch((error) => setStatus(elements.resultStatus, error.message, true));
+  if (isUpdate) {
+    // The Issue Type dropdown now drives *which* issues are searchable below it (instead of
+    // being disabled/stale as before) - any previously-fetched list/selection belongs to a
+    // different type and must be dropped before refetching.
+    clearIssueSelection();
+    loadIssuesForUpdate().catch((error) => setStatus(elements.resultStatus, error.message, true));
   }
 }
 
@@ -766,6 +782,179 @@ function updateEpicStatusText() {
   }
 }
 
+function clearIssueSelection() {
+  selectedUpdateIssue = null;
+  elements.issueSearch.value = "";
+  elements.summary.value = "";
+  elements.details.value = "";
+  updateDetailsPreview();
+  updateIssueStatusText();
+}
+
+function openIssueDropdown() {
+  elements.issueDropdown.classList.remove("hidden");
+}
+
+function closeIssueDropdown() {
+  elements.issueDropdown.classList.add("hidden");
+  issueHighlightIndex = -1;
+}
+
+function filterIssues(query) {
+  return query
+    ? cachedIssues.filter((issue) => `${issue.key} ${issue.summary}`.toLowerCase().includes(query.toLowerCase()))
+    : cachedIssues;
+}
+
+// Issues are fetched once per project+issue-type combination (see loadIssuesForUpdate), then
+// filtered locally on every keystroke here - same "live"/no-debounce pattern as the Epic
+// combobox, since the full candidate list is already in memory.
+function renderIssueDropdown(issues, statusText = "") {
+  const items = issues.map((issue) => ({ type: "issue", issue }));
+  issueDropdownItems = items;
+  issueHighlightIndex = -1;
+  elements.issueDropdown.innerHTML = "";
+
+  if (statusText) {
+    const status = document.createElement("div");
+    status.className = "combobox-status";
+    status.textContent = statusText;
+    elements.issueDropdown.appendChild(status);
+  }
+
+  items.forEach((item, index) => {
+    const row = document.createElement("div");
+    row.className = "combobox-item";
+    row.dataset.index = String(index);
+    const label = document.createElement("span");
+    label.textContent = `${item.issue.key} - ${item.issue.summary}`;
+    row.appendChild(label);
+    row.addEventListener("mousedown", (event) => {
+      event.preventDefault();
+      selectIssue(item.issue);
+    });
+    elements.issueDropdown.appendChild(row);
+  });
+
+  openIssueDropdown();
+}
+
+function highlightIssueItem(index) {
+  const rows = elements.issueDropdown.querySelectorAll(".combobox-item");
+  rows.forEach((row, rowIndex) => row.classList.toggle("is-highlighted", rowIndex === index));
+  issueHighlightIndex = index;
+}
+
+// Selecting an issue always overwrites Title/Details with that issue's real current content -
+// this is "load this issue for editing", so any leftover text from a previous selection must be
+// replaced, not merged, to avoid submitting the wrong issue's data.
+async function selectIssue(issue) {
+  selectedUpdateIssue = issue || null;
+  elements.issueSearch.value = issue ? `${issue.key} - ${issue.summary}` : "";
+  closeIssueDropdown();
+  updateIssueStatusText();
+
+  if (!issue) {
+    elements.summary.value = "";
+    elements.details.value = "";
+    updateDetailsPreview();
+    return;
+  }
+
+  setStatus(elements.resultStatus, `Loading ${issue.key}...`);
+  try {
+    const response = await chrome.runtime.sendMessage({
+      action: "getIssueDetails",
+      baseUrl: elements.baseUrl.value.trim(),
+      issueKey: issue.key
+    });
+    if (!response.ok) {
+      throw new Error(response.error);
+    }
+    elements.summary.value = response.summary || "";
+    elements.details.value = response.details || "";
+    updateDetailsPreview();
+    setStatus(elements.resultStatus, `Loaded ${issue.key}.`);
+  } catch (error) {
+    setStatus(elements.resultStatus, error.message, true);
+  }
+}
+
+function onIssueFocus() {
+  if (issuesLoading) {
+    renderIssueDropdown([], "Loading issues...");
+    return;
+  }
+  const query = elements.issueSearch.value.trim();
+  const filtered = filterIssues(query);
+  renderIssueDropdown(filtered, cachedIssues.length ? "" : "Select a project and issue type first.");
+}
+
+function onIssueBlur() {
+  setTimeout(() => closeIssueDropdown(), 150);
+}
+
+function onIssueSearchInput() {
+  selectedUpdateIssue = null;
+  if (issuesLoading) {
+    renderIssueDropdown([], "Loading issues...");
+    updateIssueStatusText();
+    return;
+  }
+  if (!cachedIssues.length) {
+    renderIssueDropdown([], "Select a project and issue type first.");
+    updateIssueStatusText();
+    return;
+  }
+  const query = elements.issueSearch.value.trim();
+  const filtered = filterIssues(query);
+  renderIssueDropdown(filtered, filtered.length ? "" : "No matching issues.");
+  updateIssueStatusText();
+}
+
+function onIssueKeydown(event) {
+  const dropdownHidden = elements.issueDropdown.classList.contains("hidden");
+  if (dropdownHidden && event.key !== "ArrowDown") {
+    return;
+  }
+  if (event.key === "ArrowDown") {
+    event.preventDefault();
+    if (dropdownHidden) {
+      onIssueFocus();
+      return;
+    }
+    highlightIssueItem(Math.min(issueHighlightIndex + 1, issueDropdownItems.length - 1));
+  } else if (event.key === "ArrowUp") {
+    event.preventDefault();
+    highlightIssueItem(Math.max(issueHighlightIndex - 1, 0));
+  } else if (event.key === "Enter") {
+    event.preventDefault();
+    const index = issueHighlightIndex >= 0 ? issueHighlightIndex : 0;
+    const item = issueDropdownItems[index];
+    if (item) {
+      selectIssue(item.issue);
+    }
+  } else if (event.key === "Escape") {
+    closeIssueDropdown();
+  }
+}
+
+function updateIssueStatusText() {
+  if (issuesLoading) {
+    elements.issueStatus.textContent = "Loading issues...";
+    return;
+  }
+  if (selectedUpdateIssue) {
+    elements.issueStatus.textContent = `Editing ${selectedUpdateIssue.key}.`;
+    return;
+  }
+  if (!cachedIssues.length) {
+    elements.issueStatus.textContent = "Select a project and issue type first";
+    return;
+  }
+  elements.issueStatus.textContent = "Select an issue to update";
+}
+
 
 function updateDetailsPreview() {
   const markdown = elements.details.value.trim();
@@ -900,8 +1089,10 @@ async function saveCommonSettings() {
 async function onProjectSelectionChanged() {
   clearAssigneeSelection();
   clearEpicSelection();
+  clearIssueSelection();
   cachedAssignableUsers = [];
   cachedEpics = [];
+  cachedIssues = [];
   // Mark epics as loading immediately (not just once loadEpics() itself fires) - loadAssignableUsers()
   // below runs first and can take a noticeable amount of time, and without this the epic search box
   // would show the misleading "Select a project first." for that whole window if the user starts
@@ -911,8 +1102,8 @@ async function onProjectSelectionChanged() {
   await saveCommonSettings();
   await loadAssignableUsers();
   await loadEpics();
-  if (elements.mode.value === "update" && elements.projectKey.value.trim()) {
-    await loadIssues().catch((error) => setStatus(elements.resultStatus, error.message, true));
+  if (elements.mode.value === "update") {
+    await loadIssuesForUpdate().catch((error) => setStatus(elements.resultStatus, error.message, true));
   }
 }
 
@@ -988,32 +1179,33 @@ function onEpicSearchInput() {
   updateEpicStatusText();
 }
 
-async function loadIssues() {
-  await saveCommonSettings();
-  const response = await chrome.runtime.sendMessage({
-    action: "listIssues",
-    baseUrl: elements.baseUrl.value.trim(),
-    projectKey: elements.projectKey.value.trim()
-  });
-  if (!response.ok) {
-    throw new Error(response.error);
-  }
-
-  cachedIssues = response.issues || [];
-  elements.issueList.innerHTML = "";
-  for (const issue of cachedIssues) {
-    const option = document.createElement("option");
-    option.value = issue.key;
-    option.textContent = `${issue.key} [${issue.issueType}] - ${issue.summary}`;
-    elements.issueList.appendChild(option);
-  }
-
-  if (!cachedIssues.length) {
-    setStatus(elements.resultStatus, "No Story/Task/Epic issues found.", true);
+async function loadIssuesForUpdate() {
+  const projectKey = elements.projectKey.value.trim();
+  const issueType = elements.issueType.value;
+  if (!projectKey || !issueType) {
+    cachedIssues = [];
+    updateIssueStatusText();
     return cachedIssues;
   }
-  setStatus(elements.resultStatus, `Loaded ${cachedIssues.length} issues.`);
-  return cachedIssues;
+  await saveCommonSettings();
+  issuesLoading = true;
+  updateIssueStatusText();
+  try {
+    const response = await chrome.runtime.sendMessage({
+      action: "listIssues",
+      baseUrl: elements.baseUrl.value.trim(),
+      projectKey,
+      issueType
+    });
+    if (!response.ok) {
+      throw new Error(response.error);
+    }
+    cachedIssues = response.issues || [];
+    return cachedIssues;
+  } finally {
+    issuesLoading = false;
+    updateIssueStatusText();
+  }
 }
 
 async function onSubmit() {
@@ -1032,6 +1224,12 @@ async function onSubmit() {
       throw new Error("Select a parent Epic before creating a Story or Task.");
     }
 
+    if (elements.mode.value === "update" && !selectedUpdateIssue) {
+      updateIssueStatusText();
+      elements.issueSearch.focus();
+      throw new Error("Select an issue to update before continuing.");
+    }
+
     const isCreate = elements.mode.value === "create";
     const isStory = elements.issueType.value === "Story";
     const isTask = elements.issueType.value === "Task";
@@ -1048,7 +1246,7 @@ async function onSubmit() {
       projectKey: elements.projectKey.value.trim(),
       mode: elements.mode.value,
       issueType: elements.issueType.value,
-      issueKey: elements.issueList.value,
+      issueKey: elements.mode.value === "update" && selectedUpdateIssue ? selectedUpdateIssue.key : "",
       summary: elements.summary.value.trim(),
       details: elements.details.value.trim(),
       assigneeAccountId:
@@ -1087,16 +1285,13 @@ async function onSubmit() {
         : "";
 
     if (payload.mode === "update") {
-      // The Issue Type select is disabled (and its value not necessarily current) while in
-      // "update" mode, so look up the real type of the issue actually being updated from the
-      // already-loaded issue list instead of trusting elements.issueType.value.
-      const updatedIssue = cachedIssues.find((issue) => issue.key === response.updatedIssueKey);
-      const updatedIssueTypeLabel = updatedIssue ? updatedIssue.issueType : "Issue";
       setIssueResultStatus(elements.resultStatus, [
-        `${updatedIssueTypeLabel} `,
+        `${payload.issueType} `,
         { key: response.updatedIssueKey, baseUrl: payload.baseUrl },
         " updated."
       ]);
+      clearIssueSelection();
+      await loadIssuesForUpdate().catch(() => {});
       return;
     }
 
@@ -1168,8 +1363,8 @@ async function autoConnectAndLoadProjects() {
     await loadProjects();
     await loadAssignableUsers();
     await loadEpics();
-    if (elements.mode.value === "update" && elements.projectKey.value.trim()) {
-      await loadIssues();
+    if (elements.mode.value === "update") {
+      await loadIssuesForUpdate();
     }
   } catch (error) {
     redirectToOptionsWithError(`${error.message} Opening extension options to fix the connection...`);

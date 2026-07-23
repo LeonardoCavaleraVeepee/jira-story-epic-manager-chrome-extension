@@ -516,6 +516,10 @@ async function bootGeminiJiraIntegration() {
   panel.epicSearch.addEventListener("focus", () => onEpicFocus(panel));
   panel.epicSearch.addEventListener("blur", () => onEpicBlur(panel));
   panel.epicSearch.addEventListener("keydown", (event) => onEpicKeydown(panel, event));
+  panel.issueSearch.addEventListener("input", () => onIssueSearchInput(panel));
+  panel.issueSearch.addEventListener("focus", () => onIssueFocus(panel));
+  panel.issueSearch.addEventListener("blur", () => onIssueBlur(panel));
+  panel.issueSearch.addEventListener("keydown", (event) => onIssueKeydown(panel, event));
   panel.details.addEventListener("input", () => updateDetailsPreview(panel));
   panel.details.addEventListener("paste", (event) => onDetailsPaste(panel, event));
   panel.details.addEventListener("dragover", (event) => event.preventDefault());
@@ -572,11 +576,6 @@ function buildPanel() {
       <option value="update">Update existing issue</option>
     </select>
 
-    <section id="jiraUpdateSection" class="hidden">
-      <label for="jiraIssueList">Issue to update</label>
-      <select id="jiraIssueList"></select>
-    </section>
-
     <label for="jiraIssueType">Issue Type</label>
     <div class="jira-issuetype-row">
       <span id="jiraIssueTypeIcon" class="jira-issuetype-icon" aria-hidden="true"></span>
@@ -586,6 +585,15 @@ function buildPanel() {
         <option value="Epic">Epic</option>
       </select>
     </div>
+
+    <section id="jiraUpdateSection" class="jira-section hidden">
+      <label for="jiraIssueSearch">Issue to update <span class="jira-required">*</span></label>
+      <div class="jira-combobox">
+        <input id="jiraIssueSearch" placeholder="Type to search issues by key or summary" autocomplete="off" />
+        <div id="jiraIssueDropdown" class="jira-combobox-dropdown hidden"></div>
+      </div>
+      <p id="jiraIssueStatus" class="jira-muted">Select a project and issue type first</p>
+    </section>
 
     <section id="jiraEpicSection" class="jira-section">
       <label for="jiraEpicSearch">Parent Epic <span class="jira-required">*</span></label>
@@ -707,7 +715,9 @@ function buildPanel() {
     connectionStatus: root.querySelector("#jiraConnectionStatus"),
     mode: root.querySelector("#jiraMode"),
     updateSection: root.querySelector("#jiraUpdateSection"),
-    issueList: root.querySelector("#jiraIssueList"),
+    issueSearch: root.querySelector("#jiraIssueSearch"),
+    issueDropdown: root.querySelector("#jiraIssueDropdown"),
+    issueStatus: root.querySelector("#jiraIssueStatus"),
     issueType: root.querySelector("#jiraIssueType"),
     issueTypeIcon: root.querySelector("#jiraIssueTypeIcon"),
     summary: root.querySelector("#jiraSummary"),
@@ -741,6 +751,10 @@ function buildPanel() {
     submitButton: root.querySelector("#jiraSubmitButton"),
     resultStatus: root.querySelector("#jiraResultStatus"),
     issues: [],
+    // True while loadIssuesForUpdate() has an in-flight fetch for the currently selected
+    // project + issue type - lets the Issue search box show "Loading issues..." instead of a
+    // misleading empty/"no matches" state while the fetch is still in flight.
+    issuesLoading: false,
     projects: [],
     assignableUsers: [],
     epics: [],
@@ -754,6 +768,10 @@ function buildPanel() {
     selectedProject: null,
     selectedAssignee: null,
     selectedEpic: null,
+    // The issue currently selected for updating, populated only via an explicit dropdown
+    // selection in the Issue search combobox (same "never parsed from free text" rule as
+    // selectedProject/selectedEpic above) so submission always targets an exact issue.
+    selectedUpdateIssue: null,
     // Frontend platform pill selection. For a Story, any combination can be selected (order of
     // selection is preserved) - one frontend subtask is created per selected platform. For a
     // Task, selecting a pill acts like a radio button (single selection only) - purely metadata
@@ -764,9 +782,11 @@ function buildPanel() {
     projectDropdownItems: [],
     assigneeDropdownItems: [],
     epicDropdownItems: [],
+    issueDropdownItems: [],
     projectHighlightIndex: -1,
     assigneeHighlightIndex: -1,
     epicHighlightIndex: -1,
+    issueHighlightIndex: -1,
     assigneeSearchDebounceId: null,
     // Maps the unique attachment filename (chosen when the image is added, matching the
     // `!filename!` / `(image:filename)` reference already written into Details) to
@@ -1211,7 +1231,6 @@ function onAssigneeKeydown(panel, event) {
 function updateModeState(panel) {
   const isUpdate = panel.mode.value === "update";
   panel.updateSection.classList.toggle("hidden", !isUpdate);
-  panel.issueType.disabled = isUpdate;
   panel.assigneeSection.classList.toggle("hidden", isUpdate);
   const showEpicSelector = isParentEpicRequired(panel);
   panel.epicSection.classList.toggle("hidden", !showEpicSelector);
@@ -1237,10 +1256,15 @@ function updateModeState(panel) {
   }
   updateIssueTypeIcon(panel);
 
-  if (isUpdate && panel.projectKey.value.trim()) {
-    loadIssues(panel).catch((error) => setStatus(panel.resultStatus, error.message, true));
+  if (isUpdate) {
+    // The Issue Type dropdown now drives *which* issues are searchable below it (instead of
+    // being disabled/stale as before) - any previously-fetched list/selection belongs to a
+    // different type and must be dropped before refetching.
+    clearIssueSelection(panel);
+    loadIssuesForUpdate(panel).catch((error) => setStatus(panel.resultStatus, error.message, true));
   }
 }
+
 
 // Renders the Android/iOS/Web platform pills. Story allows any combination (multi-select, one
 // frontend subtask created per selected pill); Task allows only one selection at a time (acts
@@ -1696,8 +1720,10 @@ function makeSummaryFromText(text) {
 async function onProjectSelectionChanged(panel) {
   clearAssigneeSelection(panel);
   clearEpicSelection(panel);
+  clearIssueSelection(panel);
   panel.assignableUsers = [];
   panel.epics = [];
+  panel.issues = [];
   // Mark epics as loading immediately (not just once loadEpics() itself fires) - loadAssignableUsers()
   // below runs first and can take a noticeable amount of time, and without this the epic search box
   // would show the misleading "Select a project first." for that whole window if the user starts
@@ -1707,35 +1733,215 @@ async function onProjectSelectionChanged(panel) {
   await saveCommonSettings(panel);
   await loadAssignableUsers(panel);
   await loadEpics(panel);
-  if (panel.mode.value === "update" && panel.projectKey.value.trim()) {
-    await loadIssues(panel).catch((error) => setStatus(panel.resultStatus, error.message, true));
+  if (panel.mode.value === "update") {
+    await loadIssuesForUpdate(panel).catch((error) => setStatus(panel.resultStatus, error.message, true));
   }
 }
 
-async function loadIssues(panel) {
-  await saveCommonSettings(panel);
-  const response = await chrome.runtime.sendMessage({
-    action: "listIssues",
-    baseUrl: panel.baseUrl.value.trim(),
-    projectKey: panel.projectKey.value.trim()
-  });
-  if (!response.ok) {
-    throw new Error(response.error);
-  }
-  panel.issues = response.issues || [];
-  panel.issueList.innerHTML = "";
-  for (const issue of panel.issues) {
-    const option = document.createElement("option");
-    option.value = issue.key;
-    option.textContent = `${issue.key} [${issue.issueType}] - ${issue.summary}`;
-    panel.issueList.appendChild(option);
-  }
-  if (!panel.issues.length) {
-    setStatus(panel.resultStatus, "No Story/Task/Epic issues found.", true);
+
+async function loadIssuesForUpdate(panel) {
+  const projectKey = panel.projectKey.value.trim();
+  const issueType = panel.issueType.value;
+  if (!projectKey || !issueType) {
+    panel.issues = [];
+    updateIssueStatusText(panel);
     return panel.issues;
   }
-  setStatus(panel.resultStatus, `Loaded ${panel.issues.length} issues.`);
-  return panel.issues;
+  await saveCommonSettings(panel);
+  panel.issuesLoading = true;
+  updateIssueStatusText(panel);
+  try {
+    const response = await chrome.runtime.sendMessage({
+      action: "listIssues",
+      baseUrl: panel.baseUrl.value.trim(),
+      projectKey,
+      issueType
+    });
+    if (!response.ok) {
+      throw new Error(response.error);
+    }
+    panel.issues = response.issues || [];
+    return panel.issues;
+  } finally {
+    panel.issuesLoading = false;
+    updateIssueStatusText(panel);
+  }
+}
+
+function clearIssueSelection(panel) {
+  panel.selectedUpdateIssue = null;
+  panel.issueSearch.value = "";
+  panel.summary.value = "";
+  panel.details.value = "";
+  updateDetailsPreview(panel);
+  updateIssueStatusText(panel);
+}
+
+function openIssueDropdown(panel) {
+  panel.issueDropdown.classList.remove("hidden");
+}
+
+function closeIssueDropdown(panel) {
+  panel.issueDropdown.classList.add("hidden");
+  panel.issueHighlightIndex = -1;
+}
+
+// Issues are fetched once per project+issue-type combination (see loadIssuesForUpdate), then
+// filtered locally on every keystroke here - same "live"/no-debounce pattern as the Epic
+// combobox, since the full candidate list is already in memory.
+function renderIssueDropdown(panel, issues, statusText = "") {
+  const items = issues.map((issue) => ({ type: "issue", issue }));
+  panel.issueDropdownItems = items;
+  panel.issueHighlightIndex = -1;
+  panel.issueDropdown.innerHTML = "";
+
+  if (statusText) {
+    const status = document.createElement("div");
+    status.className = "jira-combobox-status";
+    status.textContent = statusText;
+    panel.issueDropdown.appendChild(status);
+  }
+
+  items.forEach((item, index) => {
+    const row = document.createElement("div");
+    row.className = "jira-combobox-item";
+    row.dataset.index = String(index);
+    const label = document.createElement("span");
+    label.textContent = `${item.issue.key} - ${item.issue.summary}`;
+    row.appendChild(label);
+    row.addEventListener("mousedown", (event) => {
+      event.preventDefault();
+      selectIssue(panel, item.issue);
+    });
+    panel.issueDropdown.appendChild(row);
+  });
+
+  openIssueDropdown(panel);
+}
+
+function highlightIssueItem(panel, index) {
+  const rows = panel.issueDropdown.querySelectorAll(".jira-combobox-item");
+  rows.forEach((row, rowIndex) => row.classList.toggle("is-highlighted", rowIndex === index));
+  panel.issueHighlightIndex = index;
+}
+
+// Selecting an issue always overwrites Title/Details with that issue's real current content -
+// this is "load this issue for editing", so any leftover Gemini-autofill text or a previous
+// selection's content must be replaced, not merged, to avoid submitting the wrong issue's data.
+async function selectIssue(panel, issue) {
+  panel.selectedUpdateIssue = issue || null;
+  panel.issueSearch.value = issue ? `${issue.key} - ${issue.summary}` : "";
+  closeIssueDropdown(panel);
+  updateIssueStatusText(panel);
+
+  if (!issue) {
+    panel.summary.value = "";
+    panel.details.value = "";
+    updateDetailsPreview(panel);
+    return;
+  }
+
+  setStatus(panel.resultStatus, `Loading ${issue.key}...`);
+  try {
+    const response = await chrome.runtime.sendMessage({
+      action: "getIssueDetails",
+      baseUrl: panel.baseUrl.value.trim(),
+      issueKey: issue.key
+    });
+    if (!response.ok) {
+      throw new Error(response.error);
+    }
+    panel.summary.value = response.summary || "";
+    panel.details.value = response.details || "";
+    updateDetailsPreview(panel);
+    setStatus(panel.resultStatus, `Loaded ${issue.key}.`);
+  } catch (error) {
+    setStatus(panel.resultStatus, error.message, true);
+  }
+}
+
+function filterIssues(panel, query) {
+  return query
+    ? panel.issues.filter((issue) => matchesSearchTokens(`${issue.key} ${issue.summary}`, query))
+    : panel.issues;
+}
+
+function onIssueFocus(panel) {
+  if (panel.issuesLoading) {
+    renderIssueDropdown(panel, [], "Loading issues...");
+    return;
+  }
+  const query = panel.issueSearch.value.trim();
+  const filtered = filterIssues(panel, query);
+  renderIssueDropdown(panel, filtered, panel.issues.length ? "" : "Select a project and issue type first.");
+}
+
+function onIssueBlur(panel) {
+  setTimeout(() => closeIssueDropdown(panel), 150);
+}
+
+function onIssueSearchInput(panel) {
+  panel.selectedUpdateIssue = null;
+  if (panel.issuesLoading) {
+    renderIssueDropdown(panel, [], "Loading issues...");
+    updateIssueStatusText(panel);
+    return;
+  }
+  if (!panel.issues.length) {
+    renderIssueDropdown(panel, [], "Select a project and issue type first.");
+    updateIssueStatusText(panel);
+    return;
+  }
+  const query = panel.issueSearch.value.trim();
+  const filtered = filterIssues(panel, query);
+  renderIssueDropdown(panel, filtered, filtered.length ? "" : "No matching issues.");
+  updateIssueStatusText(panel);
+}
+
+function onIssueKeydown(panel, event) {
+  const dropdownHidden = panel.issueDropdown.classList.contains("hidden");
+  if (dropdownHidden && event.key !== "ArrowDown") {
+    return;
+  }
+  if (event.key === "ArrowDown") {
+    event.preventDefault();
+    if (dropdownHidden) {
+      onIssueFocus(panel);
+      return;
+    }
+    highlightIssueItem(
+      panel,
+      Math.min(panel.issueHighlightIndex + 1, panel.issueDropdownItems.length - 1)
+    );
+  } else if (event.key === "ArrowUp") {
+    event.preventDefault();
+    highlightIssueItem(panel, Math.max(panel.issueHighlightIndex - 1, 0));
+  } else if (event.key === "Enter") {
+    event.preventDefault();
+    const index = panel.issueHighlightIndex >= 0 ? panel.issueHighlightIndex : 0;
+    const item = panel.issueDropdownItems[index];
+    if (item) {
+      selectIssue(panel, item.issue);
+    }
+  } else if (event.key === "Escape") {
+    closeIssueDropdown(panel);
+  }
+}
+
+function updateIssueStatusText(panel) {
+  if (panel.issuesLoading) {
+    panel.issueStatus.textContent = "Loading issues...";
+    return;
+  }
+  if (panel.selectedUpdateIssue) {
+    panel.issueStatus.textContent = `Editing ${panel.selectedUpdateIssue.key}.`;
+    return;
+  }
+  if (!panel.issues.length) {
+    panel.issueStatus.textContent = "Select a project and issue type first";
+    return;
+  }
+  panel.issueStatus.textContent = "Select an issue to update";
 }
 
 async function onSubmit(panel) {
@@ -1754,6 +1960,12 @@ async function onSubmit(panel) {
       throw new Error("Select a parent Epic before creating a Story or Task.");
     }
 
+    if (panel.mode.value === "update" && !panel.selectedUpdateIssue) {
+      updateIssueStatusText(panel);
+      panel.issueSearch.focus();
+      throw new Error("Select an issue to update before continuing.");
+    }
+
     const isCreate = panel.mode.value === "create";
     const isStory = panel.issueType.value === "Story";
     const isTask = panel.issueType.value === "Task";
@@ -1770,7 +1982,7 @@ async function onSubmit(panel) {
       projectKey: panel.projectKey.value.trim(),
       mode: panel.mode.value,
       issueType: panel.issueType.value,
-      issueKey: panel.issueList.value,
+      issueKey: panel.mode.value === "update" && panel.selectedUpdateIssue ? panel.selectedUpdateIssue.key : "",
       summary: panel.summary.value.trim(),
       details: panel.details.value.trim(),
       assigneeAccountId:
@@ -1817,13 +2029,8 @@ async function onSubmit(panel) {
         : "";
 
     if (payload.mode === "update") {
-      // The Issue Type select is disabled (and its value not necessarily current) while in
-      // "update" mode, so look up the real type of the issue actually being updated from the
-      // already-loaded issue list instead of trusting panel.issueType.value.
-      const updatedIssue = panel.issues.find((issue) => issue.key === response.updatedIssueKey);
-      const updatedIssueTypeLabel = updatedIssue ? updatedIssue.issueType : "Issue";
       setIssueResultStatus(panel.resultStatus, [
-        `${updatedIssueTypeLabel} `,
+        `${payload.issueType} `,
         { key: response.updatedIssueKey, baseUrl: payload.baseUrl },
         ` updated.${attachmentWarningText}`
       ]);
@@ -1882,6 +2089,10 @@ function resetFormAfterSuccess(panel) {
   updateDetailsPreview(panel);
   renderPendingImagesList(panel);
   renderDevicePills(panel);
+  if (panel.mode.value === "update") {
+    clearIssueSelection(panel);
+    loadIssuesForUpdate(panel).catch((error) => setStatus(panel.resultStatus, error.message, true));
+  }
 }
 
 // Extracts just the hostname (e.g. "your-company.atlassian.net") from the full configured base
@@ -1928,8 +2139,8 @@ async function autoConnectAndLoadProjects(panel) {
     await loadProjects(panel);
     await loadAssignableUsers(panel);
     await loadEpics(panel);
-    if (panel.mode.value === "update" && panel.projectKey.value.trim()) {
-      await loadIssues(panel);
+    if (panel.mode.value === "update") {
+      await loadIssuesForUpdate(panel);
     }
   } catch (error) {
     redirectToOptionsWithError(panel, `${error.message} Opening Jira Settings to fix the connection...`);

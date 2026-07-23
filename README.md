@@ -11,8 +11,8 @@ chat/Canvas response directly into a ticket), or from the toolbar popup anywhere
 
 - **Connect to Jira** (Cloud or Server/Data Center) using Basic or Bearer auth, with auto-detection
   of the right auth scheme and API version.
-- **Create** a new Story, Task, or Epic, or **update** an existing one selected from a live,
-  searchable list.
+- **Create** a new Story, Task, or Epic, or **update** an existing one - pick the issue type
+  first, then search for the issue from a live, searchable list scoped to that type.
 - **Two ways to open it**:
   - A side panel that docks onto the Gemini page - pulls the current chat response (or Canvas
     document) straight into the ticket's Details field.
@@ -49,13 +49,16 @@ chat/Canvas response directly into a ticket), or from the toolbar popup anywhere
 2. Choose **Create new** or **Update existing**, then the issue type (Story / Task / Epic).
 3. Pick a **Project** (remembered across sessions) and, for Story/Task, a **Parent Epic**
    (required).
-4. Fill in **Title** and **Details** - Markdown is supported, with a live preview. In the Gemini
-   panel, Details auto-fills from the current chat/Canvas response; use **Refresh from Gemini**
-   to pull the latest one on demand.
-5. Optionally attach images (file picker, paste, or drag & drop) and pick an **Assignee**.
-6. For a Story or Task, optionally select one or more **frontend platform pills**
+4. **Updating an existing issue:** once a Project and Issue Type are selected, search for the
+   issue to update in the **Issue to update** box. Selecting it pre-fills Title and Details with
+   that issue's current content, ready to edit.
+5. Fill in **Title** and **Details** - Markdown is supported, with a live preview. In the Gemini
+   panel, Details auto-fills from the current chat/Canvas response when creating a new issue; use
+   **Refresh from Gemini** to pull the latest one on demand.
+6. Optionally attach images (file picker, paste, or drag & drop) and pick an **Assignee**.
+7. For a Story or Task, optionally select one or more **frontend platform pills**
    (Android/iOS/Web) - each selected platform creates its own subtask for a Story.
-7. Click **Create**/**Update**. On success, the issue key (and any subtask keys) link directly to
+8. Click **Create**/**Update**. On success, the issue key (and any subtask keys) link directly to
    the ticket in Jira.
 
 ### Sending a Slack notification

@@ -279,7 +279,9 @@ async function handleMessage(message) {
     case "listEpics":
       return listEpics(message.baseUrl, message.projectKey);
     case "listIssues":
-      return listIssues(message.baseUrl, message.projectKey);
+      return listIssues(message.baseUrl, message.projectKey, message.issueType);
+    case "getIssueDetails":
+      return getIssueDetails(message.baseUrl, message.issueKey);
     case "diagnoseAuth":
       return diagnoseAuth(message.baseUrl);
     case "submitIssue":
@@ -632,6 +634,204 @@ function parseInlineMarkdown(text) {
   return content.length ? content : [];
 }
 
+// Reverse of toDescriptionField() above - converts Jira's stored description (either an ADF
+// object on Cloud, or a wiki-markup string on Server/DC) back into the Markdown this extension
+// works with everywhere else, so the Update flow can pre-fill the Details textarea with the
+// issue's actual current content instead of leaving it blank/stale. This only needs to handle
+// the specific structures toWikiMarkup()/toAdf() themselves produce (mirrored 1:1 below) - it's
+// not a general-purpose Jira-format parser, so unusual formatting from tickets edited directly
+// in Jira's rich editor may round-trip imperfectly, but the common cases (headings, bold/italic/
+// code, lists, links, paragraphs) all map back cleanly.
+function fromDescriptionField(apiRoot, descriptionField) {
+  if (!descriptionField) {
+    return "";
+  }
+  if (typeof descriptionField === "string") {
+    return wikiMarkupToMarkdown(descriptionField);
+  }
+  return adfToMarkdown(descriptionField);
+}
+
+function wikiMarkupToMarkdown(text) {
+  const source = String(text || "").replace(/\r\n/g, "\n");
+  const lines = source.split("\n");
+  const blocks = [];
+  let index = 0;
+
+  while (index < lines.length) {
+    const line = lines[index];
+    const trimmed = line.trim();
+
+    if (!trimmed) {
+      index += 1;
+      continue;
+    }
+
+    if (/^\{code(:[^}]*)?\}/.test(trimmed)) {
+      const codeLines = [];
+      index += 1;
+      while (index < lines.length && !/^\{code\}/.test(lines[index].trim())) {
+        codeLines.push(lines[index]);
+        index += 1;
+      }
+      if (index < lines.length) {
+        index += 1;
+      }
+      blocks.push(`\`\`\`\n${codeLines.join("\n")}\n\`\`\``);
+      continue;
+    }
+
+    const headingMatch = trimmed.match(/^h([1-6])\.\s+(.+)$/);
+    if (headingMatch) {
+      blocks.push(`${"#".repeat(Number(headingMatch[1]))} ${inlineWikiToMarkdown(headingMatch[2])}`);
+      index += 1;
+      continue;
+    }
+
+    if (/^\*\s+/.test(trimmed)) {
+      const items = [];
+      while (index < lines.length) {
+        const itemMatch = lines[index].trim().match(/^\*\s+(.+)$/);
+        if (!itemMatch) {
+          break;
+        }
+        items.push(`- ${inlineWikiToMarkdown(itemMatch[1])}`);
+        index += 1;
+      }
+      blocks.push(items.join("\n"));
+      continue;
+    }
+
+    if (/^#\s+/.test(trimmed)) {
+      const items = [];
+      let counter = 1;
+      while (index < lines.length) {
+        const itemMatch = lines[index].trim().match(/^#\s+(.+)$/);
+        if (!itemMatch) {
+          break;
+        }
+        items.push(`${counter}. ${inlineWikiToMarkdown(itemMatch[1])}`);
+        counter += 1;
+        index += 1;
+      }
+      blocks.push(items.join("\n"));
+      continue;
+    }
+
+    const paragraphLines = [];
+    while (index < lines.length) {
+      const paragraphLine = lines[index];
+      const paragraphTrimmed = paragraphLine.trim();
+      if (
+        !paragraphTrimmed ||
+        /^\{code(:[^}]*)?\}/.test(paragraphTrimmed) ||
+        /^h[1-6]\.\s+/.test(paragraphTrimmed) ||
+        /^\*\s+/.test(paragraphTrimmed) ||
+        /^#\s+/.test(paragraphTrimmed)
+      ) {
+        break;
+      }
+      paragraphLines.push(inlineWikiToMarkdown(paragraphLine));
+      index += 1;
+    }
+    blocks.push(paragraphLines.join("\n"));
+  }
+
+  return blocks.join("\n\n");
+}
+
+function inlineWikiToMarkdown(text) {
+  const BOLD_PLACEHOLDER = "\u0000BOLD\u0000";
+  const boldSegments = [];
+  let result = String(text || "")
+    .replace(/\[([^\]|]+)\|([^\]]+)\]/g, "[$1]($2)")
+    .replace(/\*([^*]+)\*/g, (_, inner) => {
+      boldSegments.push(inner);
+      return `${BOLD_PLACEHOLDER}${boldSegments.length - 1}${BOLD_PLACEHOLDER}`;
+    })
+    .replace(/_([^_]+)_/g, "*$1*")
+    .replace(/\{\{([^}]+)\}\}/g, "`$1`");
+
+  result = result.replace(
+    new RegExp(`${BOLD_PLACEHOLDER}(\\d+)${BOLD_PLACEHOLDER}`, "g"),
+    (_, i) => `**${boldSegments[Number(i)]}**`
+  );
+
+  return result;
+}
+
+function adfToMarkdown(doc) {
+  const content = Array.isArray(doc?.content) ? doc.content : [];
+  const blocks = content.map((node) => adfNodeToMarkdown(node)).filter((block) => block !== null);
+  return blocks.join("\n\n");
+}
+
+function adfNodeToMarkdown(node) {
+  if (!node || typeof node !== "object") {
+    return null;
+  }
+
+  switch (node.type) {
+    case "heading": {
+      const level = node.attrs?.level || 1;
+      return `${"#".repeat(level)} ${adfInlineToMarkdown(node.content)}`;
+    }
+    case "codeBlock": {
+      const text = (node.content || []).map((textNode) => textNode.text || "").join("");
+      return `\`\`\`\n${text}\n\`\`\``;
+    }
+    case "bulletList": {
+      const items = (node.content || []).map((item) => `- ${adfListItemToMarkdown(item)}`);
+      return items.join("\n");
+    }
+    case "orderedList": {
+      const items = (node.content || []).map((item, index) => `${index + 1}. ${adfListItemToMarkdown(item)}`);
+      return items.join("\n");
+    }
+    case "paragraph":
+      return adfInlineToMarkdown(node.content);
+    default:
+      return adfInlineToMarkdown(node.content) || null;
+  }
+}
+
+function adfListItemToMarkdown(item) {
+  const paragraph = (item?.content || []).find((child) => child.type === "paragraph");
+  return adfInlineToMarkdown(paragraph?.content || item?.content);
+}
+
+function adfInlineToMarkdown(content) {
+  if (!Array.isArray(content)) {
+    return "";
+  }
+  return content
+    .map((node) => {
+      if (node.type === "hardBreak") {
+        return "\n";
+      }
+      if (node.type !== "text") {
+        return "";
+      }
+      const marks = Array.isArray(node.marks) ? node.marks : [];
+      let text = node.text || "";
+      const linkMark = marks.find((mark) => mark.type === "link");
+      if (linkMark?.attrs?.href) {
+        text = `[${text}](${linkMark.attrs.href})`;
+      }
+      if (marks.some((mark) => mark.type === "code")) {
+        text = `\`${text}\``;
+      }
+      if (marks.some((mark) => mark.type === "strong")) {
+        text = `**${text}**`;
+      }
+      if (marks.some((mark) => mark.type === "em")) {
+        text = `*${text}*`;
+      }
+      return text;
+    })
+    .join("");
+}
+
 async function jiraFetch(baseUrl, path, options = {}) {
   const method = String(options.method || "GET").toUpperCase();
   const isWriteMethod = method !== "GET" && method !== "HEAD" && method !== "OPTIONS";
@@ -929,18 +1129,28 @@ async function fetchAssignableUsersPaginated(
   return users;
 }
 
-async function listIssues(inputBaseUrl, projectKey) {
+// Update mode now requires picking an Issue Type first (Epic/Story/Task), then searches only
+// issues of that specific type - previously this listed up to 50 issues of ALL types mixed
+// together with no filtering, which made finding the right one to update impractical on any
+// project with more than a handful of tickets. Scoped by type, the higher cap (200, matching
+// listEpics) still comfortably covers a single project/type combination for fully client-side
+// search, same pattern as the Parent Epic combobox.
+async function listIssues(inputBaseUrl, projectKey, issueType) {
   const baseUrl = normalizeBaseUrl(inputBaseUrl);
   const apiRoot = await resolveJiraApiRoot(baseUrl);
   const key = (projectKey || "").trim();
   if (!key) {
     throw new Error("Project key is required to list issues.");
   }
+  const type = (issueType || "").trim();
+  if (!type) {
+    throw new Error("Issue type is required to list issues.");
+  }
 
   const jql = encodeURIComponent(
-    `project = ${key} AND issuetype in (Epic, Story, Task) ORDER BY updated DESC`
+    `project = ${key} AND issuetype = "${type}" ORDER BY updated DESC`
   );
-  const path = `${apiRoot}/search?jql=${jql}&maxResults=50&fields=summary,issuetype`;
+  const path = `${apiRoot}/search?jql=${jql}&maxResults=200&fields=summary,issuetype`;
   const result = await jiraFetch(baseUrl, path, { method: "GET" });
 
   return {
@@ -949,6 +1159,30 @@ async function listIssues(inputBaseUrl, projectKey) {
       summary: issue.fields?.summary || "(No summary)",
       issueType: issue.fields?.issuetype?.name || "Unknown"
     }))
+  };
+}
+
+// Fetches the current Summary/Description of a single issue so the Update flow can pre-fill the
+// Title/Details fields with its actual current content, instead of leaving them blank (which
+// previously made "Update" fail outright with "Title is required for update" unless the user
+// happened to retype the exact title from memory, and silently overwrote the real description
+// with unrelated leftover text if any was already typed/pulled in from Gemini).
+async function getIssueDetails(inputBaseUrl, issueKey) {
+  const baseUrl = normalizeBaseUrl(inputBaseUrl);
+  const apiRoot = await resolveJiraApiRoot(baseUrl);
+  const key = (issueKey || "").trim();
+  if (!key) {
+    throw new Error("Issue key is required.");
+  }
+
+  const path = `${apiRoot}/issue/${encodeURIComponent(key)}?fields=summary,description,issuetype`;
+  const result = await jiraFetch(baseUrl, path, { method: "GET" });
+
+  return {
+    key,
+    summary: result.fields?.summary || "",
+    details: fromDescriptionField(apiRoot, result.fields?.description),
+    issueType: result.fields?.issuetype?.name || "Unknown"
   };
 }
 

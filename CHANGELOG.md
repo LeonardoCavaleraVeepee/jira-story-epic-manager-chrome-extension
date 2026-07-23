@@ -503,3 +503,27 @@ For a quick overview of what the extension does and how to use it day-to-day, se
   `slackWebhookUrl` in Options - back to the simple, original model: Slack notifications are
   entirely optional, and each person who wants them pastes their own webhook URL into Options
   (Slack Integration section). Nothing else in the extension is affected either way.
+- **Fixed "Update existing issue" not working, by requiring the Issue Type first and replacing
+  the plain "Issue to update" dropdown with a proper search combobox.** Root cause: the Title
+  field is required to submit an update, but switching to Update mode never pre-filled it (or
+  Details) from the selected issue - Title started empty, so clicking Submit without manually
+  retyping the exact title threw "Title is required for update", and any leftover Details text
+  risked overwriting the real Jira description. Separately, the Issue Type dropdown was disabled
+  in Update mode and the "Issue to update" `<select>` listed up to 50 Epic/Story/Task issues
+  mixed together with no filtering, making it impractical to find the right one on any
+  reasonably active project.
+  - Issue Type is now enabled and required first in Update mode, and drives which issues are
+    searchable below it (`listIssues()` in `background.js` now takes an `issueType` JQL filter
+    instead of hardcoding `issuetype in (Epic, Story, Task)`).
+  - The plain issue `<select>` was replaced with a live search combobox (`#jiraIssueSearch`/
+    `#jiraIssueDropdown` in the Gemini panel, `#issueSearch`/`#issueDropdown` in the popup),
+    matching the existing Project/Epic/Assignee combobox pattern: fetch once per project+type,
+    filter instantly client-side on every keystroke, full keyboard navigation.
+  - Selecting an issue now calls a new `getIssueDetails` background action (added to
+    `background.js`, along with `wikiMarkupToMarkdown()`/`adfToMarkdown()`/`fromDescriptionField()`
+    - reverse converters mirroring the existing `toWikiMarkup()`/`toAdf()`/`toDescriptionField()`
+    Markdown-to-Jira converters) which fetches the issue's real current Summary/Description and
+    pre-fills Title/Details, always overwriting whatever was there before (this is "load this
+    issue for editing", so stale content must never linger). Submitting now targets the actual
+    selected issue's key instead of a stale/disabled dropdown value, and is blocked with a clear
+    "Select an issue to update before continuing." error if nothing is selected yet.

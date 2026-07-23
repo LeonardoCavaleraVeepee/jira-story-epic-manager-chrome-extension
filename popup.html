@@ -26,11 +26,6 @@
         <option value="update">Update existing issue</option>
       </select>
 
-      <section id="updateSection" class="hidden">
-        <label for="issueList">Issue to update</label>
-        <select id="issueList"></select>
-      </section>
-
       <label for="issueType">Issue Type</label>
       <div class="issuetype-row">
         <span id="issueTypeIcon" class="issuetype-icon" aria-hidden="true"></span>
@@ -40,6 +35,15 @@
           <option value="Epic">Epic</option>
         </select>
       </div>
+
+      <section id="updateSection" class="hidden">
+        <label for="issueSearch">Issue to update <span class="required">*</span></label>
+        <div class="combobox">
+          <input id="issueSearch" placeholder="Type to search issues by key or summary" autocomplete="off" />
+          <div id="issueDropdown" class="combobox-dropdown hidden"></div>
+        </div>
+        <p id="issueStatus" class="muted">Select a project and issue type first</p>
+      </section>
 
       <section id="epicSection">
         <label for="epicSearch">Parent Epic <span class="required">*</span></label>
