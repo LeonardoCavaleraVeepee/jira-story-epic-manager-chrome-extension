@@ -1,17 +1,5 @@
 "use strict";
 
-// The real Slack webhook default (DEFAULT_SLACK_WEBHOOK_URL) lives in secrets.local.js, which is
-// gitignored so it never ends up in this repo's git history - see secrets.local.example.js for
-// the template every teammate should copy locally. importScripts() throws synchronously if the
-// file doesn't exist (e.g. a fresh clone before copying the example file), so it's wrapped in a
-// try/catch and DEFAULT_SLACK_WEBHOOK_URL falls back to an empty string, which just means the
-// Slack webhook URL field in Options is no longer pre-filled and each user must paste their own.
-try {
-  importScripts("secrets.local.js");
-} catch (_error) {
-  globalThis.DEFAULT_SLACK_WEBHOOK_URL = "";
-}
-
 const DEFAULT_SUBTASK_TEMPLATE =
   "Implement {role} subtask #{index} for story: {storySummary}";
 const JIRA_API_ROOT_CANDIDATES = [
@@ -1105,16 +1093,6 @@ function normalizeSlackId(slackUserId) {
   return trimmed.replace(/^@/, "");
 }
 
-// Fallback default for the team's shared "Front Request" Slack workflow webhook (defined in
-// secrets.local.js, imported above), used only when a user hasn't entered their own override in
-// Options (Slack Integration section). Baking a default in removes per-teammate setup friction,
-// at the cost of the URL being visible to anyone with access to this extension's source
-// (chrome://extensions -> inspect, or the shared folder/zip) - acceptable here since this
-// extension is only distributed within a small trusted internal team and the worst-case abuse
-// (posting fake requests to one internal Slack channel) is low-impact. If that changes (e.g.
-// wider distribution), replace this with a server-side proxy instead of a client-embedded
-// secret. Each user can still override it per-machine in Options.
-
 // Posts one call per selected platform to the Slack "Front Request" workflow webhook so it shows
 // up in the team's intake pipeline without the requester having to re-fill the Slack form by
 // hand. The workflow's message template is built around a *single* device value (e.g. "...has
@@ -1125,24 +1103,19 @@ function normalizeSlackId(slackUserId) {
 // fixes that, and mirrors how one Jira frontend subtask is already created per platform. See the
 // Slack Integration section in options.html/options.js for where slackWebhookUrl and slackUserId
 // are configured.
-// Lets the Gemini panel/popup UI check, on load, whether a Slack webhook is actually available
-// (either the user's own override in Options, or the shared team default from secrets.local.js)
-// before enabling the "Send to Slack workflow" checkbox - since DEFAULT_SLACK_WEBHOOK_URL is a
-// background-service-worker-only global (loaded via importScripts), the UI has no way to check
-// this itself and must ask via a message, same as every other background-mediated Jira/Slack call.
+// Lets the Gemini panel/popup UI check, on load, whether a Slack webhook has been configured in
+// Options - kept as a background-mediated message (rather than the UI reading storage directly)
+// so the availability check stays in one place alongside notifySlackWorkflow() itself.
 async function hasSlackWebhook() {
   const settings = await getStorageSync().get({ slackWebhookUrl: "" });
-  return { hasWebhook: Boolean((settings.slackWebhookUrl || "").trim() || DEFAULT_SLACK_WEBHOOK_URL) };
+  return { hasWebhook: Boolean((settings.slackWebhookUrl || "").trim()) };
 }
 
 async function notifySlackWorkflow(baseUrl, issueKey, payload) {
   const settings = await getStorageSync().get({ slackWebhookUrl: "", slackUserId: "" });
-  const webhookUrl = (settings.slackWebhookUrl || "").trim() || DEFAULT_SLACK_WEBHOOK_URL;
+  const webhookUrl = (settings.slackWebhookUrl || "").trim();
   if (!webhookUrl) {
-    throw new Error(
-      "No Slack webhook URL is configured. Add one in extension Options (Slack Integration " +
-        "section), or ask whoever maintains this extension for the shared secrets.local.js file."
-    );
+    throw new Error("No Slack webhook URL is configured in extension Options.");
   }
   const slack = payload.slack || {};
   const rawDevices =

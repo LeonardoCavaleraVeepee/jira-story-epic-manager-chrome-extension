@@ -492,3 +492,14 @@ For a quick overview of what the extension does and how to use it day-to-day, se
   `secrets.local.js`, the extension works exactly as before Slack support existed - every other
   feature (Jira create/update, frontend subtasks, images) is completely unaffected either way,
   since Slack notification has always been an optional, non-blocking add-on.
+- **Removed the `secrets.local.js` / baked-in default webhook mechanism entirely**, now that this
+  repo is **public**. The previous two entries' approach (a shared team webhook baked into a
+  gitignored local file) was designed for a small, trusted, *private* audience - it never leaked
+  into git history, but it was the wrong pattern for a public repo where anyone could clone it and
+  potentially be confused about whether a webhook was expected to already be there. Removed
+  `secrets.local.js`, `secrets.local.example.js`, the `importScripts()`/try-catch loading logic
+  and `DEFAULT_SLACK_WEBHOOK_URL` from `background.js`, and the now-unnecessary `.gitignore` entry.
+  `notifySlackWorkflow()` and `hasSlackWebhook()` now only ever look at the user's own
+  `slackWebhookUrl` in Options - back to the simple, original model: Slack notifications are
+  entirely optional, and each person who wants them pastes their own webhook URL into Options
+  (Slack Integration section). Nothing else in the extension is affected either way.

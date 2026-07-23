@@ -36,10 +36,9 @@ chat/Canvas response directly into a ticket), or from the toolbar popup anywhere
 4. Click the extension's icon (or open **Options** directly) and follow the **setup wizard**:
    enter your Jira domain, account email, and API token/personal access token. The wizard tests
    the connection and saves it automatically.
-5. *(Optional, internal team use)* Copy `secrets.local.example.js` to `secrets.local.js` and fill
-   in the real Slack webhook URL to pre-fill it for everyone using this checkout. This file is
-   gitignored and never committed. Without it, each person just pastes their own webhook URL into
-   Options (Slack Integration section) instead.
+5. *(Optional)* To enable Slack notifications, open **Options** → **Slack Integration** and paste
+   your webhook URL there. This is entirely optional and per-person - nothing else in the
+   extension depends on it.
 
 ## How to use it
 
@@ -64,21 +63,22 @@ chat/Canvas response directly into a ticket), or from the toolbar popup anywhere
 Once at least one frontend platform pill is selected, check **Send to Slack workflow** to reveal
 Priority/Product/Expected ETA fields (plus optional Figma/Channel links). On submit, one webhook
 call per selected platform is sent to the configured Slack workflow, alongside creating the Jira
-issue.
+issue. This checkbox stays disabled until a webhook URL has been configured in Options.
 
 ### Settings (Options page)
 
 - **Jira connection**: domain, auth, and API root override, plus an "Advanced / manual
   configuration" section and auth diagnostics for troubleshooting.
 - **Frontend assignees**: map each platform (Android/iOS/Web) to a default assignee.
-- **Slack Integration**: webhook URL (optional if a team default is baked in via
-  `secrets.local.js`) and your Slack member ID (used for @mentions in notifications).
+- **Slack Integration**: webhook URL and your Slack member ID (used for @mentions in
+  notifications). Both are optional and stored per-installation.
 - **Toolbar Icon Behavior**: choose whether clicking the toolbar icon opens a resizable popup
   window (default) or the classic dropdown popup.
 
 ## Security note
 
 A Slack Workflow Builder webhook URL is a bearer secret - anyone who has it can trigger the
-workflow. Never commit a real webhook URL to source control; use `secrets.local.js` (gitignored)
-for a shared team default, or leave it blank and have each person configure their own in Options.
-See [CHANGELOG.md](CHANGELOG.md) for the full reasoning.
+workflow. This repo is public, so **never commit a real webhook URL to source control**. Each
+person who wants Slack notifications should paste their own webhook URL into Options; it's saved
+locally to that browser profile and never leaves it except when actually posting a notification.
+See [CHANGELOG.md](CHANGELOG.md) for the full history.
