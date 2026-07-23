@@ -1,0 +1,497 @@
+/* Jira Manager - Gemini side panel
+   Design: docked full-height panel that slides in from the right edge, on top of a semi-
+   transparent backdrop. The backdrop is click-through-free but doesn't block scrolling/reading
+   the rest of the page - it only exists to make the sidebar feel like an overlay rather than a
+   floating card, while everything behind it stays fully visible and rendered as normal. */
+
+#jira-gemini-launcher {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 2147483646;
+  border: 0;
+  border-radius: 999px;
+  padding: 13px 20px;
+  background: linear-gradient(135deg, #4f7cff 0%, #7b5cff 55%, #a34dff 100%);
+  color: #fff;
+  font: 600 14px/1 "Segoe UI", Arial, sans-serif;
+  letter-spacing: 0.2px;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(88, 66, 214, 0.45), 0 2px 6px rgba(0, 0, 0, 0.15);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+#jira-gemini-launcher:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px rgba(88, 66, 214, 0.55), 0 3px 8px rgba(0, 0, 0, 0.18);
+}
+
+#jira-gemini-launcher:active {
+  transform: translateY(0);
+}
+
+#jira-gemini-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 420px;
+  max-width: 92vw;
+  overflow-y: auto;
+  z-index: 2147483647;
+  background: #f7f8fc;
+  border-left: 1px solid rgba(20, 20, 43, 0.08);
+  box-shadow: -18px 0 45px rgba(20, 10, 60, 0.18);
+  padding: 0;
+  font: 13px/1.45 "Segoe UI", Arial, sans-serif;
+  color: #1c1c28;
+  transform: translateX(100%);
+  transition: transform 0.22s ease;
+}
+
+#jira-gemini-panel:not(.hidden) {
+  transform: translateX(0);
+}
+
+#jira-gemini-panel.hidden {
+  /* Keep display:block (unlike the previous "display: none" approach) so the slide-out
+     transition can actually play; visibility is restored once fully off-screen. */
+  pointer-events: none;
+}
+
+#jira-gemini-panel .hidden {
+  /* !important ensures this utility class always wins over component-specific `display` rules
+     (e.g. .jira-checkbox sets display:flex) regardless of source order/specificity ties - without
+     it, elements like the "Create frontend subtasks" checkbox stayed visible even when JS
+     correctly toggled the "hidden" class (e.g. when the Epic issue type is selected). */
+  display: none !important;
+}
+
+#jiraResizeHandle {
+  /* The panel is docked to the right edge of the page, so this drag handle sits along its left
+     edge - a slim full-height strip is easier to grab than a tiny corner square, since the panel
+     only ever resizes horizontally (see initPanelResize() in gemini_integration.js). Kept fully
+     inside the panel's bounds (not offset negative) since the panel's overflow-y:auto implicitly
+     computes overflow-x to "auto" too, which would otherwise clip a handle sticking out past the
+     left edge and make it undraggable. */
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: ew-resize;
+  z-index: 2;
+  background: transparent;
+  transition: background 0.15s ease;
+}
+
+#jiraResizeHandle:hover,
+#jiraResizeHandle:active {
+  background: rgba(79, 124, 255, 0.35);
+}
+
+#jira-gemini-panel .jira-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 18px;
+  background: linear-gradient(135deg, #4f7cff 0%, #7b5cff 55%, #a34dff 100%);
+  color: #fff;
+}
+
+#jira-gemini-panel .jira-header h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+#jira-gemini-panel .jira-body {
+  padding: 16px 18px 24px;
+}
+
+#jira-gemini-panel #jiraCloseButton {
+  width: auto;
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 6px;
+  font-weight: 600;
+  transition: background 0.15s ease;
+}
+
+#jira-gemini-panel #jiraCloseButton:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+#jira-gemini-panel .jira-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+#jira-gemini-panel .jira-row > * {
+  flex: 1 1 auto;
+  min-width: 90px;
+}
+
+#jira-gemini-panel label {
+  display: block;
+  margin-top: 12px;
+  margin-bottom: 5px;
+  font-weight: 600;
+  color: #33334a;
+  font-size: 12.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+#jira-gemini-panel input,
+#jira-gemini-panel textarea,
+#jira-gemini-panel select,
+#jira-gemini-panel button {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  padding: 9px 10px;
+  border-radius: 7px;
+  border: 1px solid #d7d9ea;
+  background: #fff;
+  color: #1c1c28;
+}
+
+#jira-gemini-panel input:focus,
+#jira-gemini-panel textarea:focus,
+#jira-gemini-panel select:focus {
+  outline: none;
+  border-color: #7b5cff;
+  box-shadow: 0 0 0 3px rgba(123, 92, 255, 0.16);
+}
+
+#jira-gemini-panel textarea {
+  min-height: 130px;
+  resize: vertical;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 12.5px;
+}
+
+#jira-gemini-panel button {
+  cursor: pointer;
+  background: #eef0fb;
+  border: 1px solid #d7d9ea;
+  color: #33334a;
+  font-weight: 600;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+
+#jira-gemini-panel button:hover {
+  background: #e2e5fb;
+  border-color: #b9beed;
+}
+
+#jira-gemini-panel button:active {
+  transform: scale(0.98);
+}
+
+#jira-gemini-panel .jira-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+#jira-gemini-panel .jira-actions button {
+  flex: 1;
+}
+
+#jira-gemini-panel #jiraSubmitButton {
+  background: linear-gradient(135deg, #4f7cff 0%, #7b5cff 55%, #a34dff 100%);
+  border: none;
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(88, 66, 214, 0.35);
+}
+
+#jira-gemini-panel #jiraSubmitButton:hover {
+  box-shadow: 0 8px 20px rgba(88, 66, 214, 0.45);
+}
+
+#jira-gemini-panel .jira-muted {
+  color: #6b6b80;
+  margin: 6px 0 0;
+  font-size: 12px;
+}
+
+#jira-gemini-panel .jira-warning {
+  color: #c62839;
+  font-weight: 600;
+}
+
+#jira-gemini-panel .jira-required {
+  color: #c62839;
+}
+
+#jira-gemini-panel .jira-issuetype-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+#jira-gemini-panel .jira-issuetype-icon {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  box-shadow: 0 1px 2px rgba(20, 10, 60, 0.15);
+}
+
+#jira-gemini-panel .jira-issuetype-row select {
+  flex: 1;
+  margin: 0;
+}
+
+#jira-gemini-panel .jira-section {
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid #e2e4f2;
+  border-left: 3px solid #7b5cff;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(20, 10, 60, 0.05);
+}
+
+#jira-gemini-panel .jira-section label:first-of-type {
+  margin-top: 0;
+}
+
+#jira-gemini-panel .jira-status {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-weight: 600;
+  background: #eef0fb;
+  color: #33334a;
+}
+
+#jira-gemini-panel .jira-status:empty {
+  display: none;
+}
+
+#jira-gemini-panel .jira-status a {
+  color: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+#jira-gemini-panel .jira-image-list {
+  margin-top: 8px;
+  color: #6b6b80;
+}
+
+#jira-gemini-panel .jira-image-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid #eceef7;
+}
+
+#jira-gemini-panel .jira-image-row:last-child {
+  border-bottom: none;
+}
+
+#jira-gemini-panel .jira-image-row span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#jira-gemini-panel .jira-image-row button {
+  width: auto;
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  background: #fde8ea;
+  border-color: #f6c6cb;
+  color: #a3202f;
+}
+
+#jira-gemini-panel .jira-image-row button:hover {
+  background: #fbd3d8;
+}
+
+#jira-gemini-panel .jira-markdown-preview .jira-image-preview {
+  max-width: 100%;
+  border-radius: 8px;
+  margin: 6px 0;
+  box-shadow: 0 2px 8px rgba(20, 10, 60, 0.12);
+}
+
+#jira-gemini-panel .jira-checkbox {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: #fff;
+  border: 1px solid #e2e4f2;
+  border-radius: 8px;
+}
+
+#jira-gemini-panel .jira-checkbox input {
+  width: auto;
+}
+
+#jira-gemini-panel .jira-pill-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+#jira-gemini-panel .jira-pill {
+  width: auto;
+  margin: 0;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid #d3d6ec;
+  background: #f4f5fc;
+  color: #33334a;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+#jira-gemini-panel .jira-pill:hover {
+  border-color: #7b5cff;
+}
+
+#jira-gemini-panel .jira-pill.is-selected {
+  background: #7b5cff;
+  border-color: #7b5cff;
+  color: #fff;
+}
+
+#jira-gemini-panel .jira-slack-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #eceef7;
+}
+
+#jira-gemini-panel .jira-slack-fields label {
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #33334a;
+}
+
+#jira-gemini-panel .jira-slack-fields label:first-child {
+  margin-top: 0;
+}
+
+#jira-gemini-panel .jira-markdown-preview {
+  border: 1px solid #e2e4f2;
+  border-radius: 8px;
+  background: #fbfbfe;
+  padding: 10px;
+  min-height: 60px;
+  max-height: 220px;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+
+#jira-gemini-panel .jira-markdown-preview h1,
+#jira-gemini-panel .jira-markdown-preview h2,
+#jira-gemini-panel .jira-markdown-preview h3,
+#jira-gemini-panel .jira-markdown-preview h4,
+#jira-gemini-panel .jira-markdown-preview h5,
+#jira-gemini-panel .jira-markdown-preview h6 {
+  margin: 8px 0 6px;
+  font-size: 13px;
+  color: #1c1c28;
+}
+
+#jira-gemini-panel .jira-markdown-preview p,
+#jira-gemini-panel .jira-markdown-preview ul,
+#jira-gemini-panel .jira-markdown-preview ol {
+  margin: 0 0 6px;
+}
+
+#jira-gemini-panel .jira-markdown-preview pre {
+  margin: 0 0 6px;
+  padding: 8px;
+  border-radius: 6px;
+  background: #292a3d;
+  color: #f1f1f8;
+  overflow: auto;
+}
+
+#jira-gemini-panel .jira-markdown-preview code {
+  background: #eceef7;
+  padding: 1px 4px;
+  border-radius: 4px;
+}
+
+#jira-gemini-panel .jira-markdown-preview pre code {
+  background: none;
+  padding: 0;
+}
+
+/* Assignee/Epic combobox: a single search input that doubles as the current-selection display,
+   with a live dropdown of results rendered directly below it - mirrors Jira's own native
+   assignee/epic pickers instead of the previous search-box + separate <select> pattern. */
+#jira-gemini-panel .jira-combobox {
+  position: relative;
+}
+
+#jira-gemini-panel .jira-combobox-dropdown {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 10;
+  max-height: 220px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #d8daf0;
+  border-radius: 8px;
+  box-shadow: 0 10px 28px rgba(20, 10, 60, 0.16);
+}
+
+#jira-gemini-panel .jira-combobox-item {
+  padding: 8px 12px;
+  font-size: 13px;
+  color: #1c1c28;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#jira-gemini-panel .jira-combobox-item-icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+}
+
+#jira-gemini-panel .jira-combobox-item:hover,
+#jira-gemini-panel .jira-combobox-item.is-highlighted {
+  background: #eef0fb;
+}
+
+#jira-gemini-panel .jira-combobox-status {
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #6b6b80;
+}

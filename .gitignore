@@ -1,0 +1,8 @@
+# Real Slack webhook default - never commit this. Copy secrets.local.example.js to
+# secrets.local.js and fill in the real URL locally; background.js loads it via importScripts()
+# and falls back gracefully to an empty default if it's missing.
+secrets.local.js
+
+# OS/editor cruft
+.DS_Store
+*.log

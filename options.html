@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Jira Manager Options</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 700px;
+        margin: 24px auto;
+        padding: 0 16px;
+      }
+      main {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      input,
+      textarea,
+      button,
+      select {
+        font: inherit;
+        padding: 8px;
+      }
+      .muted {
+        color: #666;
+        font-size: 13px;
+        margin: 0;
+      }
+      .status {
+        font-weight: bold;
+      }
+      .button-row {
+        display: flex;
+        gap: 8px;
+      }
+      .button-row button {
+        flex: 1;
+      }
+      .hidden {
+        display: none;
+      }
+      .wizard {
+        border: 1px solid #d8daf0;
+        border-radius: 10px;
+        padding: 16px;
+        background: #f7f8fc;
+      }
+      .wizard-summary-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .wizard-summary-row p {
+        margin: 0;
+      }
+      .wizard-body {
+        margin-top: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .wizard-step-indicator {
+        font-weight: bold;
+        margin: 0;
+      }
+      .slack-section {
+        border: 1px solid #d8daf0;
+        border-radius: 10px;
+        padding: 16px;
+        background: #f7f8fc;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .slack-section h2 {
+        margin: 0;
+      }
+      details {
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 10px 14px;
+      }
+      details > summary {
+        cursor: pointer;
+        font-weight: bold;
+        font-size: 15px;
+      }
+      details[open] > summary {
+        margin-bottom: 10px;
+      }
+      .advanced-content {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Jira Manager Options</h1>
+      <p class="muted">
+        Configure Jira Cloud API token authentication and frontend assignees for Story subtasks.
+      </p>
+
+      <section id="setupWizardSection" class="wizard">
+        <div class="wizard-summary-row">
+          <p id="wizardSummary" class="muted">Checking configuration...</p>
+          <button id="wizardToggleButton" type="button">Start setup wizard</button>
+        </div>
+
+        <div id="wizardBody" class="wizard-body hidden">
+          <p id="wizardStepIndicator" class="wizard-step-indicator">Step 1 of 3: Jira domain</p>
+
+          <div id="wizardStep1" class="wizard-step">
+            <label for="wizardDomain">Jira domain</label>
+            <input id="wizardDomain" placeholder="your-company.atlassian.net or jira.yourcompany.com" />
+            <p class="muted">
+              Just the domain, no need to type "https://". Works for both Jira Cloud
+              (atlassian.net) and Jira Server/Data Center (e.g. jira.yourcompany.com).
+            </p>
+          </div>
+
+          <div id="wizardStep2" class="wizard-step hidden">
+            <label for="wizardEmail">Jira account email</label>
+            <input id="wizardEmail" type="email" placeholder="you@company.com" />
+            <p class="muted">The email address you use to sign in to Jira.</p>
+          </div>
+
+          <div id="wizardStep3" class="wizard-step hidden">
+            <label for="wizardToken">Jira personal access token</label>
+            <input id="wizardToken" type="password" placeholder="Paste your API token / personal access token" />
+            <p class="muted">
+              Jira Cloud: create one at
+              <a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" rel="noopener"
+                >id.atlassian.com/manage-profile/security/api-tokens</a
+              >. Jira Server/Data Center: open your Jira profile and look for "Personal Access
+              Tokens".
+            </p>
+          </div>
+
+          <div class="button-row">
+            <button id="wizardBackButton" type="button" class="hidden">Back</button>
+            <button id="wizardNextButton" type="button">Next</button>
+            <button id="wizardFinishButton" type="button" class="hidden">Test &amp; Save</button>
+          </div>
+          <p id="wizardStatus" class="status"></p>
+        </div>
+      </section>
+
+      <section id="generalSection">
+        <h2>Toolbar Icon Behavior</h2>
+        <p class="muted">
+          Choose what clicking the extension's toolbar icon does.
+        </p>
+        <label for="popupMode">Toolbar icon opens</label>
+        <select id="popupMode">
+          <option value="window">A separate, resizable window (recommended)</option>
+          <option value="dropdown">A dropdown popup (classic, closes on click-away)</option>
+        </select>
+        <p class="muted">
+          The separate window behaves like any normal browser window - you can freely resize,
+          move, and it stays open even after clicking elsewhere. The classic dropdown popup closes
+          the instant you click outside it and cannot be resized, but opens instantly right under
+          the toolbar icon.
+        </p>
+        <div class="button-row">
+          <button id="saveGeneralButton" type="button">Save</button>
+        </div>
+        <p id="generalStatus" class="status"></p>
+      </section>
+
+      <section id="slackIntegrationSection" class="slack-section">
+        <h2>Slack Integration</h2>
+        <p class="muted">
+          Optionally send newly created Stories/Tasks to a Slack Workflow Builder webhook (e.g. a
+          "Front Request" workflow) right after creating them in Jira. The team's shared webhook
+          is already wired in by default, so you don't need to fill in the URL field below unless
+          you want to point it at a different workflow.
+        </p>
+        <label for="slackWebhookUrl">Slack Workflow webhook URL (optional override)</label>
+        <input
+          id="slackWebhookUrl"
+          type="password"
+          placeholder="Leave blank to use the team's default webhook"
+        />
+        <p class="muted">
+          Treat this URL as a secret - anyone with it can trigger your Slack workflow. Created in
+          Slack via Workflow Builder &rarr; Add trigger &rarr; From a webhook.
+        </p>
+        <label for="slackUserId">Your Slack member ID</label>
+        <input id="slackUserId" placeholder="e.g. U0123ABC456" />
+        <p class="muted">
+          Sent as the workflow's <code>slack_id</code> variable. Find yours in Slack via your
+          profile &rarr; "..." menu &rarr; "Copy member ID". Note: manually typing
+          <code>&lt;@slack_id&gt;</code> around the inserted variable in the message step does
+          <strong>not</strong> work - Workflow Builder's composer escapes those characters as
+          literal text instead of parsing them as a mention. To get a real clickable mention, the
+          <code>slack_id</code> trigger variable's <strong>Data type</strong> must be changed to
+          <strong>User</strong> (not Text) in the webhook trigger's settings, and then re-inserted
+          into the message step using the variable picker (typing "/" or "@") rather than typed
+          by hand - Workflow Builder will then format it correctly at send time.
+        </p>
+        <div class="button-row">
+          <button id="saveSlackButton" type="button">Save Slack settings</button>
+        </div>
+        <p id="slackStatus" class="status"></p>
+      </section>
+
+
+      <details id="advancedDetails">
+        <summary>Advanced / manual configuration</summary>
+        <div class="advanced-content">
+      <h2>Connection initialization</h2>
+      <label for="jiraBaseUrl">Jira URL</label>
+      <input id="jiraBaseUrl" placeholder="https://your-company.atlassian.net" />
+
+      <h2>Jira token authentication</h2>
+      <p class="muted">
+        Use Auto mode to try Basic then Bearer with the same token.
+      </p>
+      <label for="jiraAuthScheme">Token auth scheme</label>
+      <select id="jiraAuthScheme">
+        <option value="auto">Auto (recommended)</option>
+        <option value="basic">Basic (email + token)</option>
+        <option value="bearer">Bearer (token only)</option>
+      </select>
+      <label for="jiraAuthEmail">Atlassian account email</label>
+      <input id="jiraAuthEmail" type="email" />
+      <label for="jiraApiToken">Jira token</label>
+      <input id="jiraApiToken" type="password" />
+      <div class="button-row">
+        <button id="captureApiTokenButton" type="button">Capture API token from clipboard</button>
+        <button id="diagnoseAuthButton" type="button">Run auth diagnostics</button>
+      </div>
+
+      <label for="jiraApiRootOverride">Jira API root override</label>
+      <input id="jiraApiRootOverride" placeholder="/rest/api/2" />
+      <p class="muted">
+        Defaults to <code>/rest/api/2</code> (used whenever this field is empty), the
+        confirmed-working root for Jira Server/Data Center. Type <code>auto</code> to opt back into
+        auto-detection (mainly useful for Jira Cloud, which uses <code>/rest/api/3</code>). Setting a
+        specific path here skips detection entirely, avoiding legacy alias paths that can respond to
+        simple GET calls but redirect to a login/permission page on issue creation/metadata calls.
+      </p>
+
+      <label for="assignee1">Frontend dev #1 accountId</label>
+      <input id="assignee1" />
+      <label for="role1">Frontend dev #1 role</label>
+      <select id="role1">
+        <option value="Android">Android</option>
+        <option value="iOS">iOS</option>
+        <option value="Web">Web</option>
+      </select>
+
+      <label for="assignee2">Frontend dev #2 accountId</label>
+      <input id="assignee2" />
+      <label for="role2">Frontend dev #2 role</label>
+      <select id="role2">
+        <option value="Android">Android</option>
+        <option value="iOS">iOS</option>
+        <option value="Web">Web</option>
+      </select>
+
+      <label for="assignee3">Frontend dev #3 accountId</label>
+      <input id="assignee3" />
+      <label for="role3">Frontend dev #3 role</label>
+      <select id="role3">
+        <option value="Android">Android</option>
+        <option value="iOS">iOS</option>
+        <option value="Web">Web</option>
+      </select>
+
+      <label for="subtaskTemplate">Subtask description template</label>
+      <textarea
+        id="subtaskTemplate"
+        rows="4"
+        placeholder="Implement {role} subtask #{index} for story: {storySummary}"
+      ></textarea>
+      <p class="muted">Placeholders: {index}, {storySummary}, {role}</p>
+
+      <div class="button-row">
+        <button id="initConnectionButton" type="button">Initialize connection</button>
+        <button id="saveButton" type="button">Save all settings</button>
+      </div>
+        </div>
+      </details>
+      <p id="status" class="status"></p>
+    </main>
+
+    <script src="options.js"></script>
+  </body>
+</html>

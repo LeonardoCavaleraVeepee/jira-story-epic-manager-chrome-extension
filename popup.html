@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Jira Story & Epic Manager</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main>
+      <h1>Jira Manager</h1>
+
+      <p id="connectedDomain" class="muted"></p>
+
+      <label for="projectSearch">Project <span class="required">*</span></label>
+      <div class="combobox">
+        <input id="projectSearch" placeholder="Type to search projects by key or name" autocomplete="off" />
+        <div id="projectDropdown" class="combobox-dropdown hidden"></div>
+      </div>
+      <p id="projectStatus" class="muted">Project is required</p>
+
+      <p id="connectionStatus" class="muted"></p>
+
+      <label for="mode">Action</label>
+      <select id="mode">
+        <option value="create">Create new issue</option>
+        <option value="update">Update existing issue</option>
+      </select>
+
+      <section id="updateSection" class="hidden">
+        <label for="issueList">Issue to update</label>
+        <select id="issueList"></select>
+      </section>
+
+      <label for="issueType">Issue Type</label>
+      <div class="issuetype-row">
+        <span id="issueTypeIcon" class="issuetype-icon" aria-hidden="true"></span>
+        <select id="issueType">
+          <option value="Story">Story</option>
+          <option value="Task">Task</option>
+          <option value="Epic">Epic</option>
+        </select>
+      </div>
+
+      <section id="epicSection">
+        <label for="epicSearch">Parent Epic <span class="required">*</span></label>
+        <div class="combobox">
+          <input id="epicSearch" placeholder="Type to search epics by key or summary" autocomplete="off" />
+          <div id="epicDropdown" class="combobox-dropdown hidden"></div>
+        </div>
+        <p id="epicStatus" class="muted">Parent epic is required</p>
+      </section>
+
+      <label for="summary">Title</label>
+      <input id="summary" placeholder="Issue title" />
+
+      <label for="details">Details</label>
+      <textarea id="details" rows="8" placeholder="Detailed acceptance criteria, context, technical notes... (Markdown supported)"></textarea>
+      <p class="muted">Markdown preview</p>
+      <div id="detailsPreview" class="markdown-preview"></div>
+
+      <section id="assigneeSection">
+        <label for="assigneeSearch">Assignee</label>
+        <div class="combobox">
+          <input id="assigneeSearch" placeholder="Type a name or email to search" autocomplete="off" />
+          <div id="assigneeDropdown" class="combobox-dropdown hidden"></div>
+        </div>
+        <p id="assigneeStatus" class="muted">Default assignment: Unassigned</p>
+      </section>
+
+      <section id="frontendOptions">
+        <label for="devicePills">Frontend platform<span id="frontendRequiredMark" class="required hidden"> *</span></label>
+        <div id="devicePills" class="pill-group" role="group"></div>
+        <p id="deviceStatus" class="muted"></p>
+        <p id="frontendAssignees" class="muted"></p>
+      </section>
+
+      <section id="slackSection">
+        <label class="checkbox">
+          <input id="sendToSlack" type="checkbox" />
+          Send to Slack "Front Request" workflow
+        </label>
+        <div id="slackFields" class="slack-fields hidden">
+          <label for="slackPriority">Priority</label>
+          <select id="slackPriority">
+            <option value="">Select priority…</option>
+            <option value="Low">Low</option>
+            <option value="Medium">Medium</option>
+            <option value="High">High</option>
+            <option value="Critical">Critical</option>
+          </select>
+          <label for="slackProduct">Product</label>
+          <select id="slackProduct">
+            <option value="">Select product…</option>
+            <option value="User Engagement">User Engagement</option>
+            <option value="Navigation">Navigation</option>
+            <option value="Sales">Sales</option>
+            <option value="OrderPipe">OrderPipe</option>
+            <option value="Post Sales">Post Sales</option>
+            <option value="FastLine">FastLine</option>
+            <option value="Member LifeCycle">Member LifeCycle</option>
+            <option value="Payment">Payment</option>
+            <option value="Member Support">Member Support</option>
+          </select>
+          <label for="slackEta">Expected ETA</label>
+          <select id="slackEta">
+            <option value="">Select month…</option>
+            <option value="January">January</option>
+            <option value="February">February</option>
+            <option value="March">March</option>
+            <option value="April">April</option>
+            <option value="May">May</option>
+            <option value="June">June</option>
+            <option value="July">July</option>
+            <option value="August">August</option>
+            <option value="September">September</option>
+            <option value="October">October</option>
+            <option value="November">November</option>
+            <option value="December">December</option>
+          </select>
+          <label for="slackFigma">Figma (optional)</label>
+          <input id="slackFigma" placeholder="https://figma.com/..." />
+          <label for="slackChannelFeature">Channel feature (optional)</label>
+          <input id="slackChannelFeature" placeholder="#prj-bla-bla" />
+        </div>
+        <p id="slackStatus" class="muted"></p>
+      </section>
+
+      <button id="submitButton" type="button">Submit</button>
+      <p id="resultStatus"></p>
+      <a href="options.html" target="_blank">Open extension options</a>
+    </main>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

@@ -1,0 +1,343 @@
+html {
+  box-sizing: border-box;
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", Arial, sans-serif;
+  /* This now renders inside its own real, separate browser window (opened via
+     chrome.windows.create in background.js) rather than a toolbar "action popup" - that means it
+     supports normal OS-level window resizing/dragging natively, so the content just needs to
+     fill whatever size the window actually is instead of being capped at a small fixed width. */
+  min-width: 380px;
+  min-height: 100%;
+  background: #f7f8fc;
+  color: #1c1c28;
+  box-sizing: border-box;
+  overflow: auto;
+}
+
+main {
+  padding: 16px 24px;
+  padding-bottom: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 640px;
+}
+
+h1 {
+  margin: 0 0 10px;
+  font-size: 17px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #4f7cff 0%, #7b5cff 55%, #a34dff 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+label {
+  display: block;
+  margin-top: 10px;
+  margin-bottom: 4px;
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: #33334a;
+}
+
+input,
+select,
+textarea,
+button {
+  font: inherit;
+  padding: 9px 10px;
+  border-radius: 7px;
+  border: 1px solid #d7d9ea;
+  background: #fff;
+  color: #1c1c28;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: #7b5cff;
+  box-shadow: 0 0 0 3px rgba(123, 92, 255, 0.16);
+}
+
+button {
+  cursor: pointer;
+  background: #eef0fb;
+  font-weight: 600;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+
+button:hover {
+  background: #e2e5fb;
+  border-color: #b9beed;
+}
+
+button:active {
+  transform: scale(0.98);
+}
+
+#submitButton {
+  margin-top: 12px;
+  background: linear-gradient(135deg, #4f7cff 0%, #7b5cff 55%, #a34dff 100%);
+  border: none;
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(88, 66, 214, 0.35);
+}
+
+#submitButton:hover {
+  box-shadow: 0 8px 20px rgba(88, 66, 214, 0.45);
+}
+
+.issuetype-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.issuetype-icon {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  box-shadow: 0 1px 2px rgba(20, 10, 60, 0.15);
+}
+
+.issuetype-row select {
+  flex: 1;
+}
+
+.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  text-transform: none;
+  font-weight: 500;
+  font-size: 13px;
+}
+
+.checkbox input {
+  width: auto;
+}
+
+.pill-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.pill {
+  width: auto;
+  margin: 0;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid #d3d6ec;
+  background: #f4f5fc;
+  color: #33334a;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.pill:hover {
+  border-color: #7b5cff;
+}
+
+.pill.is-selected {
+  background: #7b5cff;
+  border-color: #7b5cff;
+  color: #fff;
+}
+
+.slack-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #eceef7;
+}
+
+.slack-fields label {
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #33334a;
+}
+
+.slack-fields label:first-child {
+  margin-top: 0;
+}
+
+.muted {
+  margin: 6px 0 0;
+  color: #6b6b80;
+  font-size: 12px;
+}
+
+#resultStatus {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-weight: 600;
+  background: #eef0fb;
+  color: #33334a;
+}
+
+#resultStatus:empty {
+  display: none;
+}
+
+#resultStatus a {
+  color: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.hidden {
+  display: none;
+}
+
+section {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid #e2e4f2;
+  border-left: 3px solid #7b5cff;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(20, 10, 60, 0.05);
+}
+
+section label:first-of-type {
+  margin-top: 0;
+}
+
+.markdown-preview {
+  border: 1px solid #e2e4f2;
+  border-radius: 8px;
+  padding: 10px;
+  min-height: 60px;
+  max-height: 180px;
+  overflow: auto;
+  white-space: pre-wrap;
+  font-size: 12px;
+  line-height: 1.45;
+  background: #fbfbfe;
+}
+
+.markdown-preview h1,
+.markdown-preview h2,
+.markdown-preview h3,
+.markdown-preview h4,
+.markdown-preview h5,
+.markdown-preview h6 {
+  margin: 8px 0 6px;
+  font-size: 13px;
+  color: #1c1c28;
+}
+
+.markdown-preview p,
+.markdown-preview ul,
+.markdown-preview ol {
+  margin: 0 0 6px;
+}
+
+.markdown-preview pre {
+  margin: 0 0 6px;
+  padding: 8px;
+  border-radius: 6px;
+  background: #292a3d;
+  color: #f1f1f8;
+  overflow: auto;
+}
+
+.markdown-preview code {
+  background: #eceef7;
+  padding: 1px 4px;
+  border-radius: 4px;
+}
+
+.markdown-preview pre code {
+  background: none;
+  padding: 0;
+}
+
+.required {
+  color: #c62839;
+}
+
+.warning {
+  color: #c62839;
+  font-weight: 600;
+}
+
+/* Assignee/Epic combobox: a single search input that doubles as the current-selection display,
+   with a live dropdown of results rendered directly below it. */
+.combobox {
+  position: relative;
+}
+
+.combobox-dropdown {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 10;
+  max-height: 220px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #d8daf0;
+  border-radius: 8px;
+  box-shadow: 0 10px 28px rgba(20, 10, 60, 0.16);
+}
+
+.combobox-item {
+  padding: 8px 12px;
+  font-size: 13px;
+  color: #1c1c28;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.combobox-item-icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+}
+
+.combobox-item:hover,
+.combobox-item.is-highlighted {
+  background: #eef0fb;
+}
+
+.combobox-status {
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #6b6b80;
+}
+
+a {
+  color: #7b5cff;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}

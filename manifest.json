@@ -1,0 +1,46 @@
+{
+  "manifest_version": 3,
+  "name": "Jira Story & Epic Manager",
+  "version": "0.1.73",
+  "description": "Create or update Jira epics/stories and auto-create frontend subtasks.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "permissions": ["storage", "cookies"],
+  "host_permissions": [
+    "https://*.atlassian.net/*",
+    "https://jira.vptech.eu/*",
+    "https://hooks.slack.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://gemini.google.com/*"],
+      "js": ["gemini_integration.js"],
+      "css": ["gemini_integration.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["icons/*.png"],
+      "matches": ["https://gemini.google.com/*"]
+    }
+  ],
+  "action": {
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    },
+    "default_title": "Jira Story & Epic Manager"
+  },
+  "options_page": "options.html"
+}
+
