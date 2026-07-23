@@ -565,3 +565,20 @@ For a quick overview of what the extension does and how to use it day-to-day, se
   and `slack_id` keys from the request body entirely when there's no value, instead of sending an
   empty string, so Slack sees "not provided" for an optional variable rather than "provided but
   invalid".
+- **Improved the assignee search to explain (and partly work around) "some devs aren't found".**
+  Root cause: `searchAssignableUsers()` calls `/user/picker?project=<key>&query=...`, which is
+  Jira's own native assignee-picker endpoint - it deliberately excludes any account that isn't
+  currently assignable on that specific project (i.e. doesn't have "Assignable User" permission
+  there via the project's permission scheme/role), even if the account is perfectly valid and
+  findable elsewhere in Jira. That's expected Jira behavior, not a code bug, but it looked
+  identical to a broken search. Two changes: (1) raised `maxResults` from 20 to 50, since a very
+  common name/surname could previously push the actual match past Jira's own relevance cutoff and
+  never appear at all; (2) when the project-scoped search comes back with zero matches,
+  `searchAssignableUsers()` now retries once, unscoped, across the whole Jira user directory via
+  the same `/user/picker` endpoint (no `project` param) so the account can still be found and
+  selected, flagging each such result with `restricted: true`. The Assignee dropdown in both the
+  Gemini panel and popup shows a "⚠ may lack assign permission on this project" note on those
+  entries and a "Not assignable in this project yet - found in the wider directory instead."
+  status line, since actually assigning them may still be rejected by Jira until a project admin
+  adds them to the right role - the real fix for that side of it is on Jira's permission scheme,
+  not in this extension.

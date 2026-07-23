@@ -1048,12 +1048,39 @@ async function searchAssignableUsers(inputBaseUrl, projectKey, queryText) {
     return { users: [] };
   }
 
+  // maxResults was previously 20 - on instances with many similarly-named accounts (shared
+  // surname, common first name, etc.) the actual person being searched for could be past that
+  // cutoff in Jira's own relevance ordering and never show up at all, which looked identical to
+  // "the search doesn't find them" even though the account itself was perfectly searchable.
+  // Raised to 50 (matching the picker's own typical UI page size) to make that far less likely.
+  const scopedUsers = await fetchUserPickerResults(baseUrl, apiRoot, query, key);
+  if (scopedUsers.length) {
+    return { users: scopedUsers };
+  }
+
+  // The project-scoped search came back empty. This most commonly means the person exists as a
+  // real, active Jira account but simply isn't (yet) part of this project's permission scheme/
+  // role that grants "Assignable User" - `project`-scoped `/user/picker` deliberately excludes
+  // anyone who isn't currently assignable there, even if they're a perfectly valid account
+  // findable elsewhere in Jira. Retry once, unscoped, across the whole user directory so at
+  // least the account can be found and selected - flagging each result as `restricted` so the UI
+  // can warn that assigning them may still be rejected by Jira until a project admin grants them
+  // that permission (adding them to the right project role is the actual fix on Jira's side).
+  const unscopedUsers = await fetchUserPickerResults(baseUrl, apiRoot, query, "");
+  return {
+    users: unscopedUsers.map((user) => ({ ...user, restricted: true }))
+  };
+}
+
+async function fetchUserPickerResults(baseUrl, apiRoot, query, projectKey) {
   const queryParams = new URLSearchParams({
     query,
-    project: key,
-    maxResults: "20",
+    maxResults: "50",
     showAvatar: "false"
   });
+  if (projectKey) {
+    queryParams.set("project", projectKey);
+  }
 
   let result;
   try {
@@ -1061,33 +1088,34 @@ async function searchAssignableUsers(inputBaseUrl, projectKey, queryText) {
       method: "GET"
     });
   } catch (_error) {
+    if (!projectKey) {
+      // The unscoped fallback call itself failed - nothing left to fall back to.
+      return [];
+    }
     // Fall back to the older assignable/search endpoint (with the query param this time,
     // scoped to the project) in case `/user/picker` isn't available on this Jira version.
-    const users = await fetchAssignableUsersPaginated(baseUrl, apiRoot, key, query, false);
-    return {
-      users: (users || [])
-        .map((user) => ({
-          // See the matching comment in listAssignableUsers() above: prefer username (`name`)
-          // over the internal `key` for Server/DC.
-          accountId: user.accountId || user.name || user.key || "",
-          displayName: user.displayName || user.name || user.emailAddress || "Unknown user",
-          emailAddress: user.emailAddress || ""
-        }))
-        .filter((user) => user.accountId)
-    };
-  }
-
-  const rawUsers = Array.isArray(result?.users) ? result.users : [];
-  return {
-    users: rawUsers
+    const users = await fetchAssignableUsersPaginated(baseUrl, apiRoot, projectKey, query, false);
+    return (users || [])
       .map((user) => ({
+        // See the matching comment in listAssignableUsers() above: prefer username (`name`)
+        // over the internal `key` for Server/DC.
         accountId: user.accountId || user.name || user.key || "",
         displayName: user.displayName || user.name || user.emailAddress || "Unknown user",
         emailAddress: user.emailAddress || ""
       }))
-      .filter((user) => user.accountId)
-  };
+      .filter((user) => user.accountId);
+  }
+
+  const rawUsers = Array.isArray(result?.users) ? result.users : [];
+  return rawUsers
+    .map((user) => ({
+      accountId: user.accountId || user.name || user.key || "",
+      displayName: user.displayName || user.name || user.emailAddress || "Unknown user",
+      emailAddress: user.emailAddress || ""
+    }))
+    .filter((user) => user.accountId);
 }
+
 
 async function fetchAssignableUsersPaginated(
   baseUrl,

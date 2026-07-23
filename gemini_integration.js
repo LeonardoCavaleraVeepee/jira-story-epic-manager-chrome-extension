@@ -1062,7 +1062,12 @@ function clearAssigneeSelection(panel) {
 
 function formatAssigneeLabel(user) {
   const email = user.emailAddress ? ` - ${user.emailAddress}` : "";
-  return `${user.displayName}${email}`;
+  // `restricted` is set when this user was only found via the unscoped directory-wide fallback
+  // search (see searchAssignableUsers in background.js) - i.e. they don't currently show up as
+  // assignable on this specific project, so assigning them may still be rejected by Jira until a
+  // project admin grants them that permission.
+  const warning = user.restricted ? " ⚠ may lack assign permission on this project" : "";
+  return `${user.displayName}${email}${warning}`;
 }
 
 function updateAssigneeStatusText(panel) {
@@ -1195,7 +1200,13 @@ function onAssigneeSearchInput(panel) {
         return;
       }
       const users = response.users || [];
-      renderAssigneeDropdown(panel, users, users.length ? "" : "No matching users.");
+      const anyRestricted = users.some((user) => user.restricted);
+      const status = !users.length
+        ? "No matching users."
+        : anyRestricted
+        ? "Not assignable in this project yet - found in the wider directory instead."
+        : "";
+      renderAssigneeDropdown(panel, users, status);
     } catch (error) {
       renderAssigneeDropdown(panel, [], error.message || "Search failed.");
     }
