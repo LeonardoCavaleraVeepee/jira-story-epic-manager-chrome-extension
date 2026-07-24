@@ -72,7 +72,7 @@ function ensureRootElements() {
   jsbPanelEl.innerHTML = `
     <h3>Send to Slack "Front Request"</h3>
     <p class="jsb-summary" id="jsb-summary"></p>
-    <label for="jsb-priority">Priority</label>
+    <label for="jsb-priority">Priority<span class="jsb-required"> *</span></label>
     <select id="jsb-priority">
       <option value="">Select priority…</option>
       <option value="Low">Low</option>
@@ -80,7 +80,7 @@ function ensureRootElements() {
       <option value="High">High</option>
       <option value="Critical">Critical</option>
     </select>
-    <label for="jsb-product">Product</label>
+    <label for="jsb-product">Product<span class="jsb-required"> *</span></label>
     <select id="jsb-product">
       <option value="">Select product…</option>
       <option value="User Engagement">User Engagement</option>
@@ -93,7 +93,7 @@ function ensureRootElements() {
       <option value="Payment">Payment</option>
       <option value="Member Support">Member Support</option>
     </select>
-    <label for="jsb-eta">Expected ETA</label>
+    <label for="jsb-eta">Expected ETA<span class="jsb-required"> *</span></label>
     <select id="jsb-eta">
       <option value="">Select month…</option>
       <option value="January">January</option>
@@ -168,6 +168,14 @@ async function onSubmit() {
     statusEl.className = "jsb-status jsb-error";
     return;
   }
+  const priorityValue = jsbPanelEl.querySelector("#jsb-priority").value;
+  const productValue = jsbPanelEl.querySelector("#jsb-product").value;
+  const expectedEtaValue = jsbPanelEl.querySelector("#jsb-eta").value;
+  if (!priorityValue || !productValue || !expectedEtaValue) {
+    statusEl.textContent = "Priority, Product and Expected ETA are required to send to Slack.";
+    statusEl.className = "jsb-status jsb-error";
+    return;
+  }
 
   submitBtn.disabled = true;
   statusEl.textContent = "Sending…";
@@ -182,9 +190,9 @@ async function onSubmit() {
       summary: summaryEl.dataset.summary || "",
       device: jsbSelectedDevice,
       slack: {
-        priority: jsbPanelEl.querySelector("#jsb-priority").value,
-        product: jsbPanelEl.querySelector("#jsb-product").value,
-        expectedEta: jsbPanelEl.querySelector("#jsb-eta").value,
+        priority: priorityValue,
+        product: productValue,
+        expectedEta: expectedEtaValue,
         figma: jsbPanelEl.querySelector("#jsb-figma").value.trim(),
         channelFeature: jsbPanelEl.querySelector("#jsb-channel").value.trim()
       }
