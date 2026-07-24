@@ -582,3 +582,19 @@ For a quick overview of what the extension does and how to use it day-to-day, se
   status line, since actually assigning them may still be rejected by Jira until a project admin
   adds them to the right role - the real fix for that side of it is on Jira's permission scheme,
   not in this extension.
+- **Added a "Send to Slack" button directly on Jira Task/Sub-task pages.** New content script
+  `jira_page_button.js` (+ `jira_page_button.css`) is injected on `https://*.atlassian.net/*` and
+  `https://jira.vptech.eu/*` (matching `host_permissions`) and shows a floating button in the
+  bottom-right corner whenever the currently-viewed issue is a Task or Sub-task and a Slack
+  webhook is configured in Options. Clicking it opens a small panel (Priority/Product/Expected
+  ETA/Platform/Figma/Channel ID, mirroring the fields already in the create form) and posts to the
+  same Slack "Front Request" workflow webhook via a new `notifySlackFromJiraPage()` in
+  `background.js`, which just re-uses the existing `notifySlackWorkflow()` so both entry points
+  share one code path. This covers tickets that already existed before Slack notifications were
+  set up, or were created outside this extension entirely, without having to recreate them through
+  the panel/popup just to trigger the webhook. The issue key is read from the page URL (handles
+  both `/browse/KEY` and board/backlog `?selectedIssue=KEY`-style URLs, polled every 1.5s since
+  Jira is a single-page app and the URL can change without a full reload) and the summary/issue
+  type are fetched via the same authenticated REST call as `getIssueDetails()` rather than
+  scraping the DOM, since Jira's issue-view markup differs a lot between Cloud/Server and across
+  UI redesigns.

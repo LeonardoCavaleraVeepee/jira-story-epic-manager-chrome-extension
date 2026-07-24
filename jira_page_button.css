@@ -1,0 +1,151 @@
+/* Styles for the floating "Send to Slack" button/panel injected directly onto Jira issue pages
+   by jira_page_button.js. Everything is scoped under the `jsb-` prefix and uses `all: initial` on
+   the root wrapper so Jira's own page styles (which vary a lot between Cloud/Server themes and
+   over time) can't bleed in and break this UI, or vice versa. */
+
+#jsb-root {
+  all: initial;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+}
+
+#jsb-root * {
+  box-sizing: border-box;
+  font-family: inherit;
+}
+
+.jsb-fab {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 2147483000;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: none;
+  background: #4a154b;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+
+.jsb-fab:hover {
+  background: #611f69;
+}
+
+.jsb-fab-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.jsb-panel {
+  position: fixed;
+  right: 24px;
+  bottom: 76px;
+  z-index: 2147483000;
+  width: 320px;
+  max-height: 80vh;
+  overflow-y: auto;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.3);
+  padding: 16px;
+  color: #172b4d;
+}
+
+.jsb-panel.jsb-hidden,
+.jsb-fab.jsb-hidden {
+  display: none !important;
+}
+
+.jsb-panel h3 {
+  margin: 0 0 4px;
+  font-size: 15px;
+}
+
+.jsb-panel .jsb-summary {
+  font-size: 12px;
+  color: #5e6c84;
+  margin: 0 0 12px;
+  word-break: break-word;
+}
+
+.jsb-panel label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  margin: 10px 0 4px;
+}
+
+.jsb-panel select,
+.jsb-panel input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #dfe1e6;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.jsb-pill-group {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.jsb-pill {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid #dfe1e6;
+  background: #f4f5f7;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.jsb-pill.jsb-selected {
+  background: #4a154b;
+  border-color: #4a154b;
+  color: #fff;
+}
+
+.jsb-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.jsb-btn {
+  padding: 6px 14px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.jsb-btn-primary {
+  background: #4a154b;
+  color: #fff;
+}
+
+.jsb-btn-secondary {
+  background: #f4f5f7;
+  color: #172b4d;
+  border-color: #dfe1e6;
+}
+
+.jsb-status {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #5e6c84;
+}
+
+.jsb-status.jsb-error {
+  color: #de350b;
+}
+
+.jsb-status.jsb-success {
+  color: #006644;
+}

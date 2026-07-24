@@ -21,6 +21,9 @@ chat/Canvas response directly into a ticket), or from the toolbar popup anywhere
   one subtask per platform (Task allows picking a single platform as metadata only).
 - **Slack notifications**: optionally post newly created tickets to a Slack Workflow Builder
   webhook (e.g. an intake/"Front Request" workflow), one call per selected platform.
+- **Send an existing Task/Sub-task to Slack directly from Jira**: a floating "Send to Slack"
+  button appears on Task and Sub-task issue pages in Jira itself (no need to open the extension),
+  letting you post one to the same Slack workflow after the fact.
 - **Image attachments**: paste, drag-drop, or pick an image into the Details field - it's uploaded
   to Jira and referenced inline where the API supports it.
 - **Markdown support** in Details, including automatic conversion to Jira's expected format
@@ -67,6 +70,16 @@ Once at least one frontend platform pill is selected, check **Send to Slack work
 Priority/Product/Expected ETA fields (plus optional Figma/Channel links). On submit, one webhook
 call per selected platform is sent to the configured Slack workflow, alongside creating the Jira
 issue. This checkbox stays disabled until a webhook URL has been configured in Options.
+
+### Sending an existing Task/Sub-task to Slack from Jira
+
+Open any **Task** or **Sub-task** in Jira (Cloud or your Server/DC instance) and a floating
+**Send to Slack** button appears in the bottom-right corner - useful for tickets that already
+existed before Slack notifications were set up, or that were created outside this extension. Click
+it, optionally fill in Priority/Product/Expected ETA/Platform/Figma/Channel ID, and click **Send**
+to post it to the same configured Slack workflow webhook. The button only appears once a webhook
+URL is configured in Options, and only on Task/Sub-task issues (Stories/Epics already have their
+own Slack step in the create form above).
 
 ### Settings (Options page)
 

@@ -288,6 +288,8 @@ async function handleMessage(message) {
       return submitIssue(message.payload);
     case "hasSlackWebhook":
       return hasSlackWebhook();
+    case "notifySlackFromJiraPage":
+      return notifySlackFromJiraPage(message);
     default:
       throw new Error("Unsupported action.");
   }
@@ -1402,6 +1404,25 @@ function normalizeSlackChannelId(channelFeature) {
 async function hasSlackWebhook() {
   const settings = await getStorageSync().get({ slackWebhookUrl: "" });
   return { hasWebhook: Boolean((settings.slackWebhookUrl || "").trim()) };
+}
+
+// Entry point for the floating "Send to Slack" button injected directly onto Jira issue pages
+// (see jira_page_button.js) - lets a Task/Sub-task already sitting in Jira be pushed into the
+// same Slack "Front Request" workflow webhook used by the create/update form, without having to
+// recreate it through the extension's own panel first. Reuses notifySlackWorkflow() as-is so both
+// entry points share one code path (and one set of bug fixes) for the webhook call itself.
+async function notifySlackFromJiraPage(message) {
+  const baseUrl = normalizeBaseUrl(message.baseUrl);
+  const issueKey = (message.issueKey || "").trim();
+  if (!issueKey) {
+    throw new Error("Issue key is required.");
+  }
+  await notifySlackWorkflow(baseUrl, issueKey, {
+    summary: message.summary || "",
+    device: message.device || "",
+    slack: message.slack || {}
+  });
+  return {};
 }
 
 async function notifySlackWorkflow(baseUrl, issueKey, payload) {
