@@ -8,16 +8,6 @@ const DEFAULT_SETTINGS = {
   slackWebhookUrl: ""
 };
 
-function getStorageSync() {
-  const storageSync = globalThis.chrome?.storage?.sync;
-  if (!storageSync) {
-    throw new Error(
-      "Extension storage API is unavailable. Reload the extension in chrome://extensions and try again."
-    );
-  }
-  return storageSync;
-}
-
 const elements = {
   // The Jira URL is configured once in the Options page, not here - this plain object keeps
   // that value in-memory (synced from storage in init()) so the rest of the popup's logic can
@@ -68,7 +58,10 @@ const elements = {
   resultStatus: document.getElementById("resultStatus")
 };
 
-const FRONTEND_DEVICE_OPTIONS = ["Android", "iOS", "Web"];
+// FRONTEND_DEVICE_OPTIONS, escapeHtml, formatAssigneeLabel, getJiraDomainFromBaseUrl,
+// getStorageSync, normalizeFrontendAssignments, buildIssueLink, and setIssueResultStatus are
+// defined in shared_utils.js (loaded first via a <script> tag in popup.html) since they're
+// identical to the copies gemini_integration.js needs - see that file's header comment for why.
 let selectedDevices = [];
 let slackWebhookConfigured = false;
 
@@ -258,7 +251,6 @@ function updateDeviceStatusText() {
   }
 }
 
-
 // Jira color-codes each issue type (purple bolt = Epic, green bookmark = Story, blue check =
 // Task); mirror that here since native <select><option> elements can't render inline images.
 function updateIssueTypeIcon() {
@@ -281,38 +273,11 @@ function setStatus(element, message, isError = false) {
 // Builds a clickable link to an issue's Jira page (e.g. https://your-domain/browse/KEY-123),
 // used by setIssueResultStatus below so success messages let you jump straight to the
 // created/updated issue instead of just naming its key as plain text.
-function buildIssueLink(baseUrl, issueKey) {
-  const link = document.createElement("a");
-  const trimmed = String(baseUrl || "").trim();
-  // jiraBaseUrl is stored without a protocol (just the domain, e.g. "jira.vptech.eu") - a bare
-  // domain string has no scheme, so it would otherwise be treated as a relative path rather than
-  // an absolute Jira URL. Add https:// whenever it's missing, mirroring normalizeBaseUrl() in
-  // background.js.
-  const withProtocol = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
-  link.href = `${withProtocol.replace(/\/+$/, "")}/browse/${issueKey}`;
-  link.textContent = issueKey;
-  link.target = "_blank";
-  link.rel = "noopener noreferrer";
-  return link;
-}
 
 // Renders a result status message as a mix of plain text and clickable issue-key links.
 // `segments` is an array where each entry is either a string (rendered as text) or
 // `{ key, baseUrl }` (rendered as a link to that issue). Replaces plain setStatus() for the
 // "issue created/updated" success messages so users can click straight through to Jira.
-function setIssueResultStatus(element, segments) {
-  element.textContent = "";
-  element.style.color = "#1b5e20";
-  for (const segment of segments) {
-    if (typeof segment === "string") {
-      if (segment) {
-        element.appendChild(document.createTextNode(segment));
-      }
-    } else if (segment && segment.key) {
-      element.appendChild(buildIssueLink(segment.baseUrl, segment.key));
-    }
-  }
-}
 
 function renderFrontendAssignees(settings) {
   const assignments = normalizeFrontendAssignments(
@@ -328,26 +293,6 @@ function renderFrontendAssignees(settings) {
   elements.frontendAssignees.textContent = `Frontend assignees: ${assignments
     .map((assignment) => `${assignment.role}: ${assignment.accountId}`)
     .join(", ")}`;
-}
-
-function normalizeFrontendAssignments(frontendAssignments, frontendAssignees) {
-  if (Array.isArray(frontendAssignments) && frontendAssignments.length) {
-    return frontendAssignments
-      .map((assignment) => ({
-        accountId: String(assignment?.accountId || "").trim(),
-        role: String(assignment?.role || "").trim()
-      }))
-      .filter((assignment) => assignment.accountId && assignment.role);
-  }
-
-  const fallbackRoles = ["Android", "iOS", "Web"];
-  return (frontendAssignees || [])
-    .slice(0, 3)
-    .map((accountId, index) => ({
-      accountId: String(accountId || "").trim(),
-      role: fallbackRoles[index]
-    }))
-    .filter((assignment) => assignment.accountId);
 }
 
 function setProjectOptions(projects, selectedKey = "") {
@@ -519,16 +464,6 @@ function clearAssigneeSelection() {
   selectedAssignee = null;
   elements.assigneeSearch.value = "";
   updateAssigneeStatusText();
-}
-
-function formatAssigneeLabel(user) {
-  const email = user.emailAddress ? ` - ${user.emailAddress}` : "";
-  // `restricted` is set when this user was only found via the unscoped directory-wide fallback
-  // search (see searchAssignableUsers in background.js) - i.e. they don't currently show up as
-  // assignable on this specific project, so assigning them may still be rejected by Jira until a
-  // project admin grants them that permission.
-  const warning = user.restricted ? " ⚠ may lack assign permission on this project" : "";
-  return `${user.displayName}${email}${warning}`;
 }
 
 function updateAssigneeStatusText() {
@@ -964,7 +899,6 @@ function updateIssueStatusText() {
   elements.issueStatus.textContent = "Select an issue to update";
 }
 
-
 function updateDetailsPreview() {
   const markdown = elements.details.value.trim();
   if (!markdown) {
@@ -1077,15 +1011,6 @@ function inlineMarkdownToHtml(text) {
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
     .replace(/\*([^*]+)\*/g, "<em>$1</em>")
     .replace(/`([^`]+)`/g, "<code>$1</code>");
-}
-
-function escapeHtml(value) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
 }
 
 async function saveCommonSettings() {
@@ -1343,13 +1268,6 @@ async function onSubmit() {
 // Extracts just the hostname (e.g. "your-company.atlassian.net") from the full configured base
 // URL for a compact, read-only "which Jira am I talking to" display, now that the URL itself is
 // only editable from the Options page.
-function getJiraDomainFromBaseUrl(baseUrl) {
-  try {
-    return new URL(baseUrl).host;
-  } catch (_error) {
-    return baseUrl;
-  }
-}
 
 function updateConnectedDomainText() {
   const baseUrl = elements.baseUrl.value.trim();

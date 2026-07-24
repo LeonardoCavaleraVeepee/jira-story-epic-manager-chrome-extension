@@ -1,9 +1,10 @@
 "use strict";
 
-// Matches the roles configured in extension Options for frontend subtask assignments (see
-// options.html's assignee1/2/3 role selects) and the "device" pill choices offered when creating
-// a Story or Task.
-const FRONTEND_DEVICE_OPTIONS = ["Android", "iOS", "Web"];
+// FRONTEND_DEVICE_OPTIONS, escapeHtml, formatAssigneeLabel, getJiraDomainFromBaseUrl,
+// getStorageSync, normalizeFrontendAssignments, buildIssueLink, and setIssueResultStatus are
+// defined in shared_utils.js (loaded first, see manifest.json's content_scripts entry for this
+// file) since they're identical to the copies popup.js needs - see that file's header comment
+// for why.
 
 if (!document.getElementById("jira-gemini-launcher")) {
   bootGeminiJiraIntegration().catch((error) => {
@@ -435,15 +436,6 @@ function convertInlineMarkdown(node) {
   return result;
 }
 
-function escapeHtml(value) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
-
 // Matches if every whitespace-separated word in the search text appears somewhere in the
 // haystack, in any order (e.g. searching "test AI" matches "AI test project"). A plain
 // substring match ("aggh test".includes("test AI")) was too strict and made project/epic/
@@ -456,16 +448,6 @@ function matchesSearchTokens(haystack, searchText) {
     .split(/\s+/)
     .filter(Boolean);
   return tokens.every((token) => normalizedHaystack.includes(token));
-}
-
-function getStorageSync() {
-  const storageSync = globalThis.chrome?.storage?.sync;
-  if (!storageSync) {
-    throw new Error(
-      "Extension storage API is unavailable. Reload the extension in chrome://extensions and try again."
-    );
-  }
-  return storageSync;
 }
 
 async function bootGeminiJiraIntegration() {
@@ -866,26 +848,6 @@ function updateSlackAvailability(panel) {
   updateSlackFieldsVisibility(panel);
 }
 
-function normalizeFrontendAssignments(frontendAssignments, frontendAssignees) {
-  if (Array.isArray(frontendAssignments) && frontendAssignments.length) {
-    return frontendAssignments
-      .map((assignment) => ({
-        accountId: String(assignment?.accountId || "").trim(),
-        role: String(assignment?.role || "").trim()
-      }))
-      .filter((assignment) => assignment.accountId && assignment.role);
-  }
-
-  const fallbackRoles = ["Android", "iOS", "Web"];
-  return (frontendAssignees || [])
-    .slice(0, 3)
-    .map((accountId, index) => ({
-      accountId: String(accountId || "").trim(),
-      role: fallbackRoles[index]
-    }))
-    .filter((assignment) => assignment.accountId);
-}
-
 function setProjectOptions(panel, projects, selectedKey = "") {
   panel.projects = [...projects];
   const selected = (selectedKey || panel.selectedProject?.key || "").trim();
@@ -1058,16 +1020,6 @@ function clearAssigneeSelection(panel) {
   panel.selectedAssignee = null;
   panel.assigneeSearch.value = "";
   updateAssigneeStatusText(panel);
-}
-
-function formatAssigneeLabel(user) {
-  const email = user.emailAddress ? ` - ${user.emailAddress}` : "";
-  // `restricted` is set when this user was only found via the unscoped directory-wide fallback
-  // search (see searchAssignableUsers in background.js) - i.e. they don't currently show up as
-  // assignable on this specific project, so assigning them may still be rejected by Jira until a
-  // project admin grants them that permission.
-  const warning = user.restricted ? " ⚠ may lack assign permission on this project" : "";
-  return `${user.displayName}${email}${warning}`;
 }
 
 function updateAssigneeStatusText(panel) {
@@ -1279,7 +1231,6 @@ function updateModeState(panel) {
   }
 }
 
-
 // Renders the Android/iOS/Web platform pills. Story allows any combination (multi-select, one
 // frontend subtask created per selected pill); Task allows only one selection at a time (acts
 // like a radio group) since it's purely descriptive metadata rather than a subtask driver.
@@ -1341,38 +1292,11 @@ function setStatus(element, text, isError = false) {
 // Builds a clickable link to an issue's Jira page (e.g. https://your-domain/browse/KEY-123),
 // used by setIssueResultStatus below so success messages let you jump straight to the
 // created/updated issue instead of just naming its key as plain text.
-function buildIssueLink(baseUrl, issueKey) {
-  const link = document.createElement("a");
-  const trimmed = String(baseUrl || "").trim();
-  // jiraBaseUrl is stored without a protocol (just the domain, e.g. "jira.vptech.eu") - a bare
-  // domain string has no scheme, so the browser would otherwise treat it as a relative path off
-  // the current page (gemini.google.com) instead of an absolute Jira URL. Add https:// whenever
-  // it's missing, mirroring normalizeBaseUrl() in background.js.
-  const withProtocol = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
-  link.href = `${withProtocol.replace(/\/+$/, "")}/browse/${issueKey}`;
-  link.textContent = issueKey;
-  link.target = "_blank";
-  link.rel = "noopener noreferrer";
-  return link;
-}
 
 // Renders a result status message as a mix of plain text and clickable issue-key links.
 // `segments` is an array where each entry is either a string (rendered as text) or
 // `{ key, baseUrl }` (rendered as a link to that issue). Replaces plain setStatus() for the
 // "issue created/updated" success messages so users can click straight through to Jira.
-function setIssueResultStatus(element, segments) {
-  element.textContent = "";
-  element.style.color = "#1b5e20";
-  for (const segment of segments) {
-    if (typeof segment === "string") {
-      if (segment) {
-        element.appendChild(document.createTextNode(segment));
-      }
-    } else if (segment && segment.key) {
-      element.appendChild(buildIssueLink(segment.baseUrl, segment.key));
-    }
-  }
-}
 
 function setEpicOptions(panel, epics, selectedEpicKey = "") {
   panel.epics = [...epics];
@@ -1556,7 +1480,6 @@ function updateEpicStatusText(panel) {
     panel.epicStatus.classList.remove("jira-warning");
   }
 }
-
 
 function closePanel(panel, event) {
   event.preventDefault();
@@ -1751,7 +1674,6 @@ async function onProjectSelectionChanged(panel) {
     await loadIssuesForUpdate(panel).catch((error) => setStatus(panel.resultStatus, error.message, true));
   }
 }
-
 
 async function loadIssuesForUpdate(panel) {
   const projectKey = panel.projectKey.value.trim();
@@ -2117,13 +2039,6 @@ function resetFormAfterSuccess(panel) {
 // Extracts just the hostname (e.g. "your-company.atlassian.net") from the full configured base
 // URL for a compact, read-only "which Jira am I talking to" display, now that the URL itself is
 // only editable from the Options page (see updateConnectedDomainText below).
-function getJiraDomainFromBaseUrl(baseUrl) {
-  try {
-    return new URL(baseUrl).host;
-  } catch (_error) {
-    return baseUrl;
-  }
-}
 
 function updateConnectedDomainText(panel) {
   const baseUrl = panel.baseUrl.value.trim();

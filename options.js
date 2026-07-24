@@ -2,7 +2,8 @@
 
 const DEFAULT_TEMPLATE =
   "Implement {role} subtask #{index} for story: {storySummary}";
-const DEFAULT_ASSIGNMENT_ROLES = ["Android", "iOS", "Web"];
+// FRONTEND_DEVICE_OPTIONS, getStorageSync, and getJiraDomainFromBaseUrl are defined in
+// shared_utils.js (loaded first via a <script> tag in options.html).
 
 const jiraBaseUrl = document.getElementById("jiraBaseUrl");
 const jiraAuthScheme = document.getElementById("jiraAuthScheme");
@@ -32,7 +33,6 @@ const popupMode = document.getElementById("popupMode");
 const saveGeneralButton = document.getElementById("saveGeneralButton");
 const generalStatus = document.getElementById("generalStatus");
 
-
 const wizardSummary = document.getElementById("wizardSummary");
 const wizardToggleButton = document.getElementById("wizardToggleButton");
 const wizardBody = document.getElementById("wizardBody");
@@ -55,16 +55,6 @@ const WIZARD_STEPS = [
 ];
 let wizardCurrentStep = 0;
 
-
-function getStorageSync() {
-  const storageSync = globalThis.chrome?.storage?.sync;
-  if (!storageSync) {
-    throw new Error(
-      "Extension storage API is unavailable. Reload the extension in chrome://extensions and try again."
-    );
-  }
-  return storageSync;
-}
 
 // The toolbar icon's popup-vs-window behavior is a per-device UI preference, not something that
 // should follow the user's Jira/Slack configuration to other machines (mirroring the same
@@ -109,11 +99,11 @@ async function init() {
   jiraApiToken.value = settings.jiraAuthApiToken || settings.jiraAuthBearerToken || "";
   jiraApiRootOverride.value = settings.jiraApiRootOverride || "/rest/api/2";
   assignee1.value = assignments[0]?.accountId || "";
-  role1.value = assignments[0]?.role || DEFAULT_ASSIGNMENT_ROLES[0];
+  role1.value = assignments[0]?.role || FRONTEND_DEVICE_OPTIONS[0];
   assignee2.value = assignments[1]?.accountId || "";
-  role2.value = assignments[1]?.role || DEFAULT_ASSIGNMENT_ROLES[1];
+  role2.value = assignments[1]?.role || FRONTEND_DEVICE_OPTIONS[1];
   assignee3.value = assignments[2]?.accountId || "";
-  role3.value = assignments[2]?.role || DEFAULT_ASSIGNMENT_ROLES[2];
+  role3.value = assignments[2]?.role || FRONTEND_DEVICE_OPTIONS[2];
   subtaskTemplate.value = settings.subtaskTemplate || DEFAULT_TEMPLATE;
   slackWebhookUrl.value = settings.slackWebhookUrl || "";
   slackUserId.value = settings.slackUserId || "";
@@ -145,14 +135,6 @@ async function onSaveGeneralSettings() {
 function renderGeneralStatus(message, isError = false) {
   generalStatus.textContent = message;
   generalStatus.style.color = isError ? "#c62828" : "#1b5e20";
-}
-
-function getJiraDomainFromBaseUrl(baseUrl) {
-  try {
-    return new URL(/^https?:\/\//i.test(baseUrl) ? baseUrl : `https://${baseUrl}`).host;
-  } catch (_error) {
-    return baseUrl;
-  }
 }
 
 function isJiraConfigured(settings) {
@@ -308,12 +290,12 @@ function normalizeAssignments(frontendAssignments, frontendAssignees) {
   if (assignments.length >= 3) {
     return assignments.slice(0, 3).map((assignment, index) => ({
       accountId: String(assignment?.accountId || "").trim(),
-      role: String(assignment?.role || DEFAULT_ASSIGNMENT_ROLES[index]).trim()
+      role: String(assignment?.role || FRONTEND_DEVICE_OPTIONS[index]).trim()
     }));
   }
 
   const assignees = Array.isArray(frontendAssignees) ? frontendAssignees : [];
-  return DEFAULT_ASSIGNMENT_ROLES.map((role, index) => ({
+  return FRONTEND_DEVICE_OPTIONS.map((role, index) => ({
     accountId: String(assignees[index] || "").trim(),
     role
   }));

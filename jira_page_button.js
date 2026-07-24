@@ -11,7 +11,9 @@
 // scraping the page's DOM for the summary/issue type. DOM scraping would be far more fragile
 // across Jira Cloud's frequent UI changes and the very different Server/DC issue view markup.
 
-const FRONTEND_DEVICE_OPTIONS = ["Android", "iOS", "Web"];
+// FRONTEND_DEVICE_OPTIONS is defined in shared_utils.js (loaded first, see manifest.json's
+// content_scripts entry for this file) so the platform list only has to be maintained in one
+// place across all three UI surfaces (Gemini panel, popup, and this Jira-page button).
 let jsbCurrentIssueKey = null;
 let jsbSlackWebhookConfigured = false;
 let jsbSelectedDevice = "";

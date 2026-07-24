@@ -598,3 +598,24 @@ For a quick overview of what the extension does and how to use it day-to-day, se
   type are fetched via the same authenticated REST call as `getIssueDetails()` rather than
   scraping the DOM, since Jira's issue-view markup differs a lot between Cloud/Server and across
   UI redesigns.
+- **Refactored: extracted duplicated utilities into a new shared_utils.js.** gemini_integration.js
+  and popup.js had ~79 same-named functions, but only a handful were actually byte-for-byte
+  identical (most differ because gemini_integration.js threads a `panel` object through its
+  functions while popup.js uses module-level state - unifying those would be a much larger,
+  riskier rewrite and was intentionally left alone). The genuinely identical pieces - the
+  `FRONTEND_DEVICE_OPTIONS` constant, `escapeHtml()`, `formatAssigneeLabel()`, `getStorageSync()`,
+  `normalizeFrontendAssignments()`, `buildIssueLink()`, and `setIssueResultStatus()` - now live
+  once in `shared_utils.js`, loaded before their consumer via manifest.json's content_scripts
+  entries (gemini_integration.js, jira_page_button.js) and a `<script>` tag (popup.html,
+  options.html). Also folded options.js's separate `DEFAULT_ASSIGNMENT_ROLES` array and duplicate
+  `getStorageSync()`/`getJiraDomainFromBaseUrl()` into the same shared copies.
+  While comparing the duplicates, found that `getJiraDomainFromBaseUrl()` in
+  gemini_integration.js/popup.js was missing the "assume https:// if no protocol is present"
+  handling that options.js's copy already had (jiraBaseUrl can be stored without a protocol) -
+  the shared version now always includes that fix. `background.js` (the service worker) keeps its
+  own small separate copies of anything DOM-dependent copies can't reach, and its own
+  `normalizeFrontendAssignments()` (subtly different validation rules from the UI copy - a
+  requires-3-assignees variant used only for server-side subtask creation) was deliberately left
+  as-is rather than force-unified, to avoid changing behavior no one asked to change. No
+  user-facing behavior changes from this refactor other than the `getJiraDomainFromBaseUrl` fix
+  above.
