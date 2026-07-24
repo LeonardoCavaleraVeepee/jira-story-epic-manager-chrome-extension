@@ -252,6 +252,11 @@ async function refreshForCurrentIssue() {
 }
 
 async function init() {
+  const featureSettings = await getStorageSync().get({ showJiraSendToSlackButton: true });
+  if (featureSettings.showJiraSendToSlackButton === false) {
+    return;
+  }
+
   ensureRootElements();
 
   await refreshSlackConfigured();

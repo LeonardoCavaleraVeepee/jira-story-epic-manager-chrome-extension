@@ -37,6 +37,16 @@
       .button-row button {
         flex: 1;
       }
+      .checkbox-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: normal;
+      }
+      .checkbox-row input[type="checkbox"] {
+        padding: 0;
+        width: auto;
+      }
       .hidden {
         display: none;
       }
@@ -150,7 +160,7 @@
       </section>
 
       <section id="generalSection">
-        <h2>Toolbar Icon Behavior</h2>
+        <h2>General Behavior</h2>
         <p class="muted">
           Choose what clicking the extension's toolbar icon does.
         </p>
@@ -165,6 +175,21 @@
           the instant you click outside it and cannot be resized, but opens instantly right under
           the toolbar icon.
         </p>
+
+        <label class="checkbox-row" for="showGeminiSendToJiraButton">
+          <input type="checkbox" id="showGeminiSendToJiraButton" />
+          Show the "Send to Jira" button on Gemini (bottom right)
+        </label>
+        <label class="checkbox-row" for="showJiraSendToSlackButton">
+          <input type="checkbox" id="showJiraSendToSlackButton" />
+          Show the "Send to Slack" button on Jira issue pages (bottom right)
+        </label>
+        <p class="muted">
+          These floating buttons are injected directly onto the page. Turning one off removes it
+          entirely from that page; you may need to reload an already-open tab for the change to
+          take effect.
+        </p>
+
         <div class="button-row">
           <button id="saveGeneralButton" type="button">Save</button>
         </div>

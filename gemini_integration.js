@@ -451,6 +451,11 @@ function matchesSearchTokens(haystack, searchText) {
 }
 
 async function bootGeminiJiraIntegration() {
+  const featureSettings = await getStorageSync().get({ showGeminiSendToJiraButton: true });
+  if (featureSettings.showGeminiSendToJiraButton === false) {
+    return;
+  }
+
   const launcher = document.createElement("button");
   launcher.id = "jira-gemini-launcher";
   launcher.type = "button";

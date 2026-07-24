@@ -89,7 +89,9 @@ own Slack step in the create form above).
 - **Slack Integration**: webhook URL and your Slack member ID (used for @mentions in
   notifications). Both are optional and stored per-installation.
 - **Toolbar Icon Behavior**: choose whether clicking the toolbar icon opens a resizable popup
-  window (default) or the classic dropdown popup.
+  window (default) or the classic dropdown popup. Also lets you show/hide the floating "Send to
+  Jira" (Gemini) and "Send to Slack" (Jira) buttons independently - handy if you only use one of
+  the two integrations. Changes to these two toggles apply the next time the relevant page loads.
 
 ## Security note
 

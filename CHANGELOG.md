@@ -633,3 +633,8 @@ For a quick overview of what the extension does and how to use it day-to-day, se
   `jira_page_button.js` now blocks submission with "Priority, Product and Expected ETA are
   required to send to Slack." if any of the three is left unselected, and the three field labels
   show a required-field asterisk.
+- **Added toggles to show/hide the floating "Send to Jira" (Gemini) and "Send to Slack" (Jira)
+  buttons**, in Options → General Behavior. Both default to on. `gemini_integration.js` and
+  `jira_page_button.js` each read their own sync-storage flag (`showGeminiSendToJiraButton`,
+  `showJiraSendToSlackButton`) before injecting their button/panel, so disabling one removes it
+  from the page entirely (an already-open tab needs a reload to pick up the change).

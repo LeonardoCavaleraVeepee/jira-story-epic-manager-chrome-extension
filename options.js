@@ -30,6 +30,8 @@ const saveSlackButton = document.getElementById("saveSlackButton");
 const slackStatus = document.getElementById("slackStatus");
 
 const popupMode = document.getElementById("popupMode");
+const showGeminiSendToJiraButton = document.getElementById("showGeminiSendToJiraButton");
+const showJiraSendToSlackButton = document.getElementById("showJiraSendToSlackButton");
 const saveGeneralButton = document.getElementById("saveGeneralButton");
 const generalStatus = document.getElementById("generalStatus");
 
@@ -85,7 +87,9 @@ async function init() {
     frontendAssignments: [],
     subtaskTemplate: DEFAULT_TEMPLATE,
     slackWebhookUrl: "",
-    slackUserId: ""
+    slackUserId: "",
+    showGeminiSendToJiraButton: true,
+    showJiraSendToSlackButton: true
   });
 
   const assignments = normalizeAssignments(
@@ -107,6 +111,8 @@ async function init() {
   subtaskTemplate.value = settings.subtaskTemplate || DEFAULT_TEMPLATE;
   slackWebhookUrl.value = settings.slackWebhookUrl || "";
   slackUserId.value = settings.slackUserId || "";
+  showGeminiSendToJiraButton.checked = settings.showGeminiSendToJiraButton !== false;
+  showJiraSendToSlackButton.checked = settings.showJiraSendToSlackButton !== false;
 
   const localSettings = await getStorageLocal().get({ popupMode: "window" });
   popupMode.value = localSettings.popupMode || "window";
@@ -124,9 +130,19 @@ async function init() {
 async function onSaveGeneralSettings() {
   try {
     await getStorageLocal().set({ popupMode: popupMode.value });
+    // showGeminiSendToJiraButton/showJiraSendToSlackButton are read by the two content scripts
+    // (gemini_integration.js / jira_page_button.js) that inject the floating buttons, so these
+    // live in .sync (not .local) alongside the rest of the Jira/Slack configuration those
+    // scripts already rely on.
+    await getStorageSync().set({
+      showGeminiSendToJiraButton: showGeminiSendToJiraButton.checked,
+      showJiraSendToSlackButton: showJiraSendToSlackButton.checked
+    });
     // background.js listens for this storage change (chrome.storage.onChanged) and calls
     // chrome.action.setPopup() accordingly - no message needs to be sent explicitly here.
-    renderGeneralStatus("Saved. This takes effect the next time you click the toolbar icon.");
+    renderGeneralStatus(
+      "Saved. Popup behavior takes effect on the next toolbar click; button visibility may need a page reload."
+    );
   } catch (error) {
     renderGeneralStatus(error.message, true);
   }
