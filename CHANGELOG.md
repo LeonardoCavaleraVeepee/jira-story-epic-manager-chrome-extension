@@ -619,3 +619,11 @@ For a quick overview of what the extension does and how to use it day-to-day, se
   as-is rather than force-unified, to avoid changing behavior no one asked to change. No
   user-facing behavior changes from this refactor other than the `getJiraDomainFromBaseUrl` fix
   above.
+- **Made Platform required on the Jira-page "Send to Slack" button.** The create/update form's
+  Slack notification already requires a frontend platform pill to be selected; the Jira-page
+  button (added in 0.1.81) had left it optional, which could post a notification with an empty
+  `device` value that doesn't match what the Slack workflow's template expects. The Platform
+  field is now marked with a required-field asterisk and `onSubmit()` in `jira_page_button.js`
+  rejects the submission with a clear inline message ("Select a platform before sending.") if no
+  pill is selected, mirroring the same requirement already enforced in gemini_integration.js/
+  popup.js's own create/update forms.

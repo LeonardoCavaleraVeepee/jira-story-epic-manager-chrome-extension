@@ -73,6 +73,10 @@
   word-break: break-word;
 }
 
+.jsb-required {
+  color: #de350b;
+}
+
 .jsb-panel label {
   display: block;
   font-size: 12px;

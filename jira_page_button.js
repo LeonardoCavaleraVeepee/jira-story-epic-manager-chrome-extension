@@ -109,7 +109,7 @@ function ensureRootElements() {
       <option value="November">November</option>
       <option value="December">December</option>
     </select>
-    <label>Platform (optional)</label>
+    <label>Platform<span class="jsb-required"> *</span></label>
     <div class="jsb-pill-group" id="jsb-device-pills"></div>
     <label for="jsb-figma">Figma (optional)</label>
     <input id="jsb-figma" placeholder="https://figma.com/..." />
@@ -160,6 +160,11 @@ async function onSubmit() {
   const submitBtn = jsbPanelEl.querySelector("#jsb-submit");
   if (!jsbCurrentIssueKey) {
     statusEl.textContent = "No issue detected on this page.";
+    statusEl.className = "jsb-status jsb-error";
+    return;
+  }
+  if (!jsbSelectedDevice) {
+    statusEl.textContent = "Select a platform before sending.";
     statusEl.className = "jsb-status jsb-error";
     return;
   }
