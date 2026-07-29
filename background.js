@@ -1432,15 +1432,24 @@ async function notifySlackWorkflow(baseUrl, issueKey, payload) {
     throw new Error("No Slack webhook URL is configured in extension Options.");
   }
   const slack = payload.slack || {};
-  const rawDevices =
-    payload.frontendSubtaskRoles && payload.frontendSubtaskRoles.length
-      ? payload.frontendSubtaskRoles
-      : payload.device
-      ? [payload.device]
-      : [];
+  const hasSubtaskRoles = Boolean(payload.frontendSubtaskRoles && payload.frontendSubtaskRoles.length);
+  const rawDevices = hasSubtaskRoles
+    ? payload.frontendSubtaskRoles
+    : payload.device
+    ? [payload.device]
+    : [];
   // If no platform was selected at all (e.g. an Epic, or a Story/Task with no pill picked), still
   // send a single call with an empty device value rather than skipping the notification entirely.
   const devicesToNotify = rawDevices.length ? rawDevices : [""];
+
+  // When notifying per selected platform for a Story, an actual frontend subtask (one per
+  // platform, titled "[role] storySummary" - see createFrontendSubtasks()) was just created
+  // alongside the parent Story, and each Slack call is meant to represent *that* subtask, not the
+  // parent Story itself. Previously every call sent the Story's own summary regardless of device,
+  // so e.g. the Android and iOS notifications were indistinguishable and didn't match the actual
+  // Jira subtask a recipient would click into. Rebuild the same "[role] storySummary" title used
+  // for the real subtask here so the two always match.
+  const baseStorySummary = hasSubtaskRoles ? removeFrontsPrefix(payload.summary) : "";
 
   const jiraTicketUrl = `${normalizeBaseUrl(baseUrl)}/browse/${issueKey}`;
   const slackId = normalizeSlackId(settings.slackUserId);
@@ -1453,8 +1462,9 @@ async function notifySlackWorkflow(baseUrl, issueKey, payload) {
       // names as-is.
       const slackDevice = device === "Web" ? "Desktop" : device;
       const normalizedChannelFeature = normalizeSlackChannelId(slack.channelFeature);
+      const requestFeatures = hasSubtaskRoles ? `[${device}] ${baseStorySummary}` : payload.summary || "";
       const body = {
-        request_features: payload.summary || "",
+        request_features: requestFeatures,
         device: slackDevice,
         priority: slack.priority || "",
         product: slack.product || "",

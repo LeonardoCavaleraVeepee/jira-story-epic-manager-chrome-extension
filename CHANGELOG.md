@@ -651,3 +651,15 @@ For a quick overview of what the extension does and how to use it day-to-day, se
   `insertTextAtCursor()` into `popup.js` (text-only; the popup has no image-attachment UI/state to
   mirror gemini_integration.js's image-paste handling) and wired up the `paste` listener on
   `elements.details` in `init()`.
+- **Fixed: the Slack "Front Request" notification for each frontend subtask sent the parent
+  Story's title instead of that subtask's own title.** When a Story is created with 2+ platforms
+  selected, one real Jira subtask is created per platform titled `[role] storySummary` (see
+  `createFrontendSubtasks()`), and `notifySlackWorkflow()` also fires one Slack call per platform -
+  but every call's `request_features` used the same `payload.summary` (the Story's own title)
+  regardless of device, so e.g. the Android and iOS Slack notifications were indistinguishable and
+  didn't match the actual subtask a recipient would click into from Jira. `notifySlackWorkflow()`
+  now rebuilds the same `[role] storySummary` title used for the real subtask (via
+  `removeFrontsPrefix(payload.summary)`) and sends that as `request_features` per device whenever
+  `payload.frontendSubtaskRoles` is populated. Single-platform Tasks and the Jira-page "Send to
+  Slack" button (which notify for an issue that already exists as-is, not a subtask-per-platform
+  Story) are unaffected and still send the issue's own real title.
