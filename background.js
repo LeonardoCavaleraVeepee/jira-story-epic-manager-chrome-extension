@@ -1296,42 +1296,50 @@ async function submitIssue(payload) {
     throw new Error(`Issue creation failed: ${error.message}`);
   }
 
-  // Subtask creation, image upload, and the Slack notification are all independent once the
-  // parent issue exists, so run them concurrently instead of one after another. This matters
-  // because MV3 service workers can be terminated (idle-killed) after roughly 30 seconds -
-  // creating 2+ frontend subtasks sequentially (each with its own retries/delays for Jira's
-  // "Issue Does Not Exist" indexing lag) could push the Slack call past that window and lose it
-  // silently. Running them in parallel keeps the total wall-clock time close to the slowest single
-  // step instead of the sum of all of them, and means a slow/retrying subtask can no longer delay
-  // (or, in the worst case, outright prevent) the Slack webhook from firing.
+  // Subtask creation, image upload, and the Slack notification are all kicked off together right
+  // after the parent issue exists, instead of one after another, since MV3 service workers can be
+  // terminated (idle-killed) after roughly 30 seconds - starting them concurrently keeps the total
+  // wall-clock time close to the slowest single step instead of the sum of all of them. The Slack
+  // notification for a Story with selected platforms is the one exception: it needs the real
+  // subtask keys (to link to each platform's own subtask, not the parent Story - see below), so it
+  // awaits the already-in-flight subtasksPromise before actually sending, rather than being
+  // strictly independent like image upload is.
   console.log(
     `[Jira Manager] submitIssue: parent ${createdIssue.key} created, starting subtasks/attachments/slack in parallel`,
     { frontendSubtaskRoles: payload.frontendSubtaskRoles, slackEnabled: Boolean(payload.slack?.enabled) }
   );
-  const subtasksPromise =
-    payload.issueType === "Story" && Array.isArray(payload.frontendSubtaskRoles) && payload.frontendSubtaskRoles.length
-      ? createFrontendSubtasks(baseUrl, {
-          apiRoot,
-          parentIssueKey: createdIssue.key,
-          projectKey,
-          storySummary: normalizedStorySummary,
-          roles: payload.frontendSubtaskRoles
-        })
-      : Promise.resolve({ created: [], failures: [] });
+  const hasSubtaskRoles =
+    payload.issueType === "Story" && Array.isArray(payload.frontendSubtaskRoles) && payload.frontendSubtaskRoles.length > 0;
+  const subtasksPromise = hasSubtaskRoles
+    ? createFrontendSubtasks(baseUrl, {
+        apiRoot,
+        parentIssueKey: createdIssue.key,
+        projectKey,
+        storySummary: normalizedStorySummary,
+        roles: payload.frontendSubtaskRoles
+      })
+    : Promise.resolve({ created: [], createdByRole: {}, failures: [] });
 
   const attachmentWarningsPromise = uploadPendingImages(baseUrl, apiRoot, createdIssue.key, payload.images);
 
   const slackWarningsPromise =
     payload.slack && payload.slack.enabled
-      ? notifySlackWorkflow(baseUrl, createdIssue.key, payload)
-          .then(() => {
+      ? (async () => {
+          // The Slack notification for a Story with selected platforms is meant to link to each
+          // platform's own subtask, not the parent Story - so when subtasks are being created,
+          // wait for that (already in-flight, not-yet-awaited) promise to resolve first to get
+          // their real keys. This only delays Slack for the Story+subtasks case; Tasks/Epics (no
+          // subtasks at all) resolve `subtasksPromise` immediately above and are unaffected.
+          const subtaskKeysByRole = hasSubtaskRoles ? (await subtasksPromise).createdByRole : null;
+          try {
+            await notifySlackWorkflow(baseUrl, createdIssue.key, payload, subtaskKeysByRole);
             console.log("[Jira Manager] Slack webhook call succeeded.");
             return [];
-          })
-          .catch((error) => {
+          } catch (error) {
             console.error("[Jira Manager] Slack webhook call failed:", error);
             return [`Slack workflow notification failed: ${error.message}`];
-          })
+          }
+        })()
       : Promise.resolve([]);
 
   const [subtaskResult, attachmentWarnings, slackWarnings] = await Promise.all([
@@ -1425,7 +1433,7 @@ async function notifySlackFromJiraPage(message) {
   return {};
 }
 
-async function notifySlackWorkflow(baseUrl, issueKey, payload) {
+async function notifySlackWorkflow(baseUrl, issueKey, payload, subtaskKeysByRole) {
   const settings = await getStorageSync().get({ slackWebhookUrl: "", slackUserId: "" });
   const webhookUrl = (settings.slackWebhookUrl || "").trim();
   if (!webhookUrl) {
@@ -1451,7 +1459,6 @@ async function notifySlackWorkflow(baseUrl, issueKey, payload) {
   // for the real subtask here so the two always match.
   const baseStorySummary = hasSubtaskRoles ? removeFrontsPrefix(payload.summary) : "";
 
-  const jiraTicketUrl = `${normalizeBaseUrl(baseUrl)}/browse/${issueKey}`;
   const slackId = normalizeSlackId(settings.slackUserId);
 
   const results = await Promise.all(
@@ -1463,6 +1470,12 @@ async function notifySlackWorkflow(baseUrl, issueKey, payload) {
       const slackDevice = device === "Web" ? "Desktop" : device;
       const normalizedChannelFeature = normalizeSlackChannelId(slack.channelFeature);
       const requestFeatures = hasSubtaskRoles ? `[${device}] ${baseStorySummary}` : payload.summary || "";
+      // Link to that platform's own subtask (e.g. the Android subtask for the Android call), not
+      // the parent Story - falls back to the parent's key if no subtask key is known for this
+      // device (e.g. that platform's subtask creation failed, or this isn't a Story+subtasks
+      // notification at all, such as a Task or the Jira-page "Send to Slack" button).
+      const deviceIssueKey = (subtaskKeysByRole && subtaskKeysByRole[device]) || issueKey;
+      const jiraTicketUrl = `${normalizeBaseUrl(baseUrl)}/browse/${deviceIssueKey}`;
       const body = {
         request_features: requestFeatures,
         device: slackDevice,
@@ -1948,6 +1961,11 @@ async function createFrontendSubtasks(
 ) {
   const requestedRoles = Array.isArray(roles) && roles.length ? roles : null;
   const created = [];
+  // Maps each platform role (e.g. "Android") to the key of the subtask just created for it, so
+  // callers that need to refer to one specific platform's subtask (e.g. the Slack notification,
+  // which should link to that subtask, not the parent Story) can look it up directly instead of
+  // guessing from the `created` list's order.
+  const createdByRole = {};
   const failures = [];
 
   try {
@@ -2003,6 +2021,7 @@ async function createFrontendSubtasks(
           assignee
         });
         created.push(issue.key);
+        createdByRole[role] = issue.key;
       } catch (error) {
         failures.push(`${role} subtask failed: ${error.message}`);
       }
@@ -2013,7 +2032,7 @@ async function createFrontendSubtasks(
     failures.push(error.message);
   }
 
-  return { created, failures };
+  return { created, createdByRole, failures };
 }
 
 async function createSubtaskWithRetry({

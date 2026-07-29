@@ -663,3 +663,11 @@ For a quick overview of what the extension does and how to use it day-to-day, se
   `payload.frontendSubtaskRoles` is populated. Single-platform Tasks and the Jira-page "Send to
   Slack" button (which notify for an issue that already exists as-is, not a subtask-per-platform
   Story) are unaffected and still send the issue's own real title.
+- **Fixed: the `jira_ticket` link in each per-platform Slack notification pointed at the parent
+  Story, not that platform's own subtask.** `createFrontendSubtasks()` now also returns
+  `createdByRole` (role -> created subtask key), and `submitIssue()`'s Slack-notification step
+  awaits the already-in-flight subtask-creation promise (only when `frontendSubtaskRoles` is
+  populated - Tasks/Epics have no subtasks and are unaffected) to get it before building each
+  device's payload. `notifySlackWorkflow()` now takes that map as a 4th argument and builds each
+  device's `jira_ticket` from its own subtask's key, falling back to the parent issue's key only if
+  that platform's subtask creation itself failed (so the link is never broken/missing).
