@@ -135,6 +135,7 @@ async function init() {
   elements.issueSearch.addEventListener("blur", onIssueBlur);
   elements.issueSearch.addEventListener("keydown", onIssueKeydown);
   elements.details.addEventListener("input", updateDetailsPreview);
+  elements.details.addEventListener("paste", onDetailsPaste);
   elements.submitButton.addEventListener("click", onSubmit);
   elements.sendToSlack.addEventListener("change", updateSlackFieldsVisibility);
 
@@ -1011,6 +1012,202 @@ function inlineMarkdownToHtml(text) {
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
     .replace(/\*([^*]+)\*/g, "<em>$1</em>")
     .replace(/`([^`]+)`/g, "<code>$1</code>");
+}
+
+// Pasting rich text (e.g. copied from Gemini's rendered response, which is HTML with real
+// <strong>/<ul>/<h2> tags rather than literal markdown characters) into a plain <textarea>
+// normally loses all formatting: the browser converts the clipboard content to plain text using
+// textContent, which never contained markdown syntax to begin with. Intercept the paste and
+// convert the clipboard's HTML into actual Markdown text instead, when HTML is available. Mirrors
+// gemini_integration.js's onDetailsPaste (minus image handling, which the popup doesn't support).
+function onDetailsPaste(event) {
+  const clipboardData = event.clipboardData || window.clipboardData;
+  const html = clipboardData?.getData("text/html");
+  if (!html) {
+    return;
+  }
+
+  const container = document.createElement("div");
+  container.innerHTML = html;
+  const markdown = convertNodeToMarkdown(container).trim();
+  if (!markdown) {
+    return;
+  }
+
+  event.preventDefault();
+  insertTextAtCursor(elements.details, markdown);
+  updateDetailsPreview();
+}
+
+function insertTextAtCursor(textarea, text) {
+  const start = textarea.selectionStart ?? textarea.value.length;
+  const end = textarea.selectionEnd ?? textarea.value.length;
+  const value = textarea.value;
+  textarea.value = value.slice(0, start) + text + value.slice(end);
+  const cursor = start + text.length;
+  textarea.selectionStart = cursor;
+  textarea.selectionEnd = cursor;
+}
+
+// Converts a DOM node's rendered HTML into Markdown text, preserving headings, bold/italic,
+// inline code, links, and bullet/numbered lists. Used for pasting rich text into the Details
+// textarea - without this, formatting present in the source HTML (e.g. **bold**, "- " bullets)
+// simply disappears because the browser/DOM only exposes plain textContent by default, which
+// never contained the markdown syntax to begin with (the formatting lived in HTML tags, not
+// text).
+function convertNodeToMarkdown(rootNode) {
+  const blocks = [];
+  let inlineBuffer = "";
+
+  const flushInline = () => {
+    const trimmed = inlineBuffer.trim();
+    if (trimmed) {
+      blocks.push(trimmed);
+    }
+    inlineBuffer = "";
+  };
+
+  const walk = (node) => {
+    for (const child of node.childNodes) {
+      if (child.nodeType === Node.TEXT_NODE) {
+        inlineBuffer += child.textContent;
+        continue;
+      }
+      if (child.nodeType !== Node.ELEMENT_NODE) {
+        continue;
+      }
+
+      const tag = child.tagName;
+      switch (tag) {
+        case "H1":
+        case "H2":
+        case "H3":
+        case "H4":
+        case "H5":
+        case "H6": {
+          flushInline();
+          const level = Number(tag[1]);
+          const text = convertInlineMarkdown(child).trim();
+          if (text) {
+            blocks.push(`${"#".repeat(level)} ${text}`);
+          }
+          break;
+        }
+        case "P": {
+          flushInline();
+          const text = convertInlineMarkdown(child).trim();
+          if (text) {
+            blocks.push(text);
+          }
+          break;
+        }
+        case "DIV":
+        case "SECTION":
+        case "ARTICLE":
+        case "MAIN": {
+          flushInline();
+          walk(child);
+          break;
+        }
+        case "UL": {
+          flushInline();
+          const items = [...child.children]
+            .filter((item) => item.tagName === "LI")
+            .map((item) => `- ${convertInlineMarkdown(item).trim()}`)
+            .filter((line) => line !== "-");
+          if (items.length) {
+            blocks.push(items.join("\n"));
+          }
+          break;
+        }
+        case "OL": {
+          flushInline();
+          const items = [...child.children]
+            .filter((item) => item.tagName === "LI")
+            .map((item, index) => `${index + 1}. ${convertInlineMarkdown(item).trim()}`);
+          if (items.length) {
+            blocks.push(items.join("\n"));
+          }
+          break;
+        }
+        case "PRE": {
+          flushInline();
+          const codeText = child.textContent.replace(/\n+$/, "");
+          blocks.push(`\`\`\`\n${codeText}\n\`\`\``);
+          break;
+        }
+        case "BLOCKQUOTE": {
+          flushInline();
+          const inner = convertInlineMarkdown(child).trim();
+          if (inner) {
+            blocks.push(
+              inner
+                .split("\n")
+                .map((line) => `> ${line}`)
+                .join("\n")
+            );
+          }
+          break;
+        }
+        case "HR": {
+          flushInline();
+          blocks.push("---");
+          break;
+        }
+        default: {
+          inlineBuffer += convertInlineMarkdown(child);
+        }
+      }
+    }
+  };
+
+  walk(rootNode);
+  flushInline();
+  return blocks.join("\n\n");
+}
+
+function convertInlineMarkdown(node) {
+  let result = "";
+  for (const child of node.childNodes) {
+    if (child.nodeType === Node.TEXT_NODE) {
+      result += child.textContent;
+      continue;
+    }
+    if (child.nodeType !== Node.ELEMENT_NODE) {
+      continue;
+    }
+
+    const tag = child.tagName;
+    switch (tag) {
+      case "BR":
+        result += "\n";
+        break;
+      case "STRONG":
+      case "B": {
+        const inner = convertInlineMarkdown(child).trim();
+        result += inner ? `**${inner}**` : "";
+        break;
+      }
+      case "EM":
+      case "I": {
+        const inner = convertInlineMarkdown(child).trim();
+        result += inner ? `*${inner}*` : "";
+        break;
+      }
+      case "CODE":
+        result += `\`${child.textContent}\``;
+        break;
+      case "A": {
+        const href = child.getAttribute("href");
+        const text = convertInlineMarkdown(child).trim();
+        result += href && text ? `[${text}](${href})` : text;
+        break;
+      }
+      default:
+        result += convertInlineMarkdown(child);
+    }
+  }
+  return result;
 }
 
 async function saveCommonSettings() {

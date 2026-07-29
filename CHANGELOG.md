@@ -638,3 +638,16 @@ For a quick overview of what the extension does and how to use it day-to-day, se
   `jira_page_button.js` each read their own sync-storage flag (`showGeminiSendToJiraButton`,
   `showJiraSendToSlackButton`) before injecting their button/panel, so disabling one removes it
   from the page entirely (an already-open tab needs a reload to pick up the change).
+- **Fixed: pasting rich text into the toolbar popup's Details field lost all Markdown
+  formatting**, unlike the Gemini side panel where it worked correctly. Root cause:
+  `gemini_integration.js` has a `paste` listener on Details that converts the clipboard's HTML
+  (e.g. copied from Gemini's own rendered response, which is real `<strong>`/`<ul>`/`<h2>` tags,
+  not literal Markdown characters) into actual Markdown text via `convertNodeToMarkdown()` /
+  `convertInlineMarkdown()` before inserting it. `popup.js` never had this listener at all, so a
+  paste there fell through to the browser's default plain-text paste, which only ever exposes
+  `textContent` - formatting that lived in HTML tags, not text, was silently dropped, and the
+  live Markdown preview correctly showed nothing formatted since there was no Markdown syntax to
+  render. Ported `onDetailsPaste()`, `convertNodeToMarkdown()`, `convertInlineMarkdown()`, and
+  `insertTextAtCursor()` into `popup.js` (text-only; the popup has no image-attachment UI/state to
+  mirror gemini_integration.js's image-paste handling) and wired up the `paste` listener on
+  `elements.details` in `init()`.
